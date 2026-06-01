@@ -35,7 +35,7 @@ object FakeVoiceDuration : ClickableHookItem(), IResolvesDex {
         showComposeDialog(context) {
             var durationInput by remember { mutableStateOf(WePrefs.getLongOrDef(KEY_DURATION, 0).toString()) }
             AlertDialogContent(
-                title = { Text("修改语音时长") },
+                title = { Text("伪装语音时长") },
                 text = {
                     TextField(
                         value = durationInput,
