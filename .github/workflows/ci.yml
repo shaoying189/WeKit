@@ -245,5 +245,5 @@ jobs:
             curl -s -X POST "http://localhost:8081/bot${BOT_TOKEN}/sendMediaGroup" \
               -F chat_id="${CHAT_ID}" \
               -F media="${media_json}" \
-              - "${form_args[@]}"
+              "${form_args[@]}"
           fi
