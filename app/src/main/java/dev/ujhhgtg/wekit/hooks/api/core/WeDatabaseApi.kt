@@ -122,21 +122,43 @@ object WeDatabaseApi : ApiHookItem(), IResolvesDex {
 
         /** 查询单个好友（包含微信内部id或自定义微信号alias匹配） */
         fun friend(wxid: String) = """
-        SELECT $CONTACT_FIELDS, r.type
-        FROM rcontact r
-        $LEFT_JOIN_IMG_FLAG
-        WHERE
-            (r.username = '$wxid' OR r.alias = '$wxid')
-            AND (
-                r.encryptUsername != '' -- 是真好友
-                OR
-                r.username = (SELECT value FROM userinfo WHERE id = 2) -- 是我自己
-            )
-            AND r.verifyFlag = 0
-            AND (r.type & 1) != 0
-            AND (r.type & 8) = 0
-            AND (r.type & 32) = 0
-            AND r.username NOT LIKE '%chatroom'
+            SELECT $CONTACT_FIELDS, r.type
+            FROM rcontact r
+            $LEFT_JOIN_IMG_FLAG
+            WHERE
+                (r.username = '$wxid' OR r.alias = '$wxid')
+                AND (
+                    r.encryptUsername != '' -- 是真好友
+                    OR
+                    r.username = (SELECT value FROM userinfo WHERE id = 2) -- 是我自己
+                )
+                AND r.verifyFlag = 0
+                AND (r.type & 1) != 0
+                AND (r.type & 8) = 0
+                AND (r.type & 32) = 0
+                AND r.username NOT LIKE '%chatroom'
+        """.trimIndent()
+
+        /** 按消息量降序获取好友及消息数 */
+        fun friendsOrderedByMessageCount(limit: Int) = """
+            SELECT COUNT(*) AS msg_count, $CONTACT_FIELDS, r.type
+            FROM rcontact r
+            $LEFT_JOIN_IMG_FLAG
+            JOIN message m ON r.username = m.talker
+            WHERE
+                (
+                    r.encryptUsername != '' -- 是真好友
+                    OR
+                    r.username = (SELECT value FROM userinfo WHERE id = 2) -- 是我自己
+                )
+                AND r.verifyFlag = 0
+                AND (r.type & 1) != 0
+                AND (r.type & 8) = 0
+                AND (r.type & 32) = 0
+                AND r.username NOT LIKE '%chatroom'
+            GROUP BY r.username
+            ORDER BY msg_count DESC
+            LIMIT $limit
         """.trimIndent()
 
         // =========================================
@@ -401,6 +423,29 @@ object WeDatabaseApi : ApiHookItem(), IResolvesDex {
         } catch (e: Exception) {
             WeLogger.e(TAG, "failed to get friend details; wxid=$wxId", e)
             return null
+        }
+    }
+
+    /**
+     * 获取按聊天消息总数降序排列的好友列表
+     * * @param limit 返回的最大结果数量限制
+     * @return 包含 WeContact 到 消息总数 映射的 Map（保持降序排列）
+     */
+    fun getFriendsOrderedByMessageCount(limit: Int): Map<WeContact, Int> {
+        if (limit <= 0) return emptyMap()
+        try {
+            val result = executeQuery(SqlStatements.friendsOrderedByMessageCount(limit))
+            if (result.isEmpty()) return emptyMap()
+
+            val contacts = mapToContacts(result)
+
+            // 使用 mapIndexed 组合并转换为 Map，Kotlin 的 toMap() 会默认保留原本的降序遍历顺序
+            return result.mapIndexed { index, row ->
+                contacts[index] to row.int("msg_count")
+            }.toMap()
+        } catch (e: Exception) {
+            WeLogger.e(TAG, "failed to get friends ordered by message count; limit=$limit", e)
+            return emptyMap()
         }
     }
 

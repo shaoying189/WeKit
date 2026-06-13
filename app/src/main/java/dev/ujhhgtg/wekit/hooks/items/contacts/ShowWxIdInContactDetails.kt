@@ -27,6 +27,7 @@ object ShowWxIdInContactDetails : SwitchHookItem(), IContactInfoProvider {
 
     override fun onItemClick(activity: Activity, key: String): Boolean {
         if (key != PREF_KEY) return false
+
         val wxId = activity.currentWxId ?: return true
 
         copyToClipboard(activity, wxId)
