@@ -11,7 +11,7 @@
 * [⭐ 建议反馈指南](feature-request-guide.md)
 * [🛡️ 免责声明](cosmic-level-disclaimer.md)
 
-## 聊天功能
+## 聊天
 
 * [阻止消息撤回 1](features/chat/anti-message-recall-1.md)
 * [阻止消息撤回 3](features/chat/anti-message-recall-3.md)
@@ -70,33 +70,33 @@
 ## 朋友圈
 
 * [拦截朋友圈删除](features/moments/anti-moments-delete.md)
-* [朋友圈底部详细信息](features/moments/display-details.md)
-* [朋友圈查询增强](features/moments/enhance-query.md)
 * [朋友圈伪集赞](features/moments/fake-moments-likes.md)
+* [朋友圈底部详细信息](features/moments/display-details.md)
 * [消息转圈](features/moments/forward-messages-to-moments.md)
-* [单击不关闭视频播放器](features/moments/no-close-video-player-on-click.md)
+* [朋友圈查询增强](features/moments/enhance-query.md)
 * [拦截朋友圈广告](features/moments/remove-moments-ads.md)
+* [单击不关闭视频播放器](features/moments/no-close-video-player-on-click.md)
 
 ## 红包与支付
 
-* [允许领取私聊红包](features/payment/allow-private-chat-receive-outgoing-red-packets.md)
-* [自动接收转账](features/payment/auto-accept-transfers.md)
 * [自动抢红包](features/payment/auto-open-red-packets.md)
+* [自动接收转账](features/payment/auto-accept-transfers.md)
 * [指纹支付](features/payment/fingerprint-pay.md)
 * [修改转账显示余额](features/payment/modify-transfer-wallet-balance-display.md)
 * [修改显示余额](features/payment/modify-wallet-balance-display.md)
+* [允许领取私聊红包](features/payment/allow-private-chat-receive-outgoing-red-packets.md)
 
 ## 界面美化
 
+* [莫奈引擎](features/beautify/monet-engine.md)
 * [主屏幕添加 FAB](features/beautify/add-main-screen-fab.md)
+* [美化首页底部导航栏](features/beautify/replace-navigation-bar.md)
+* [「我」页面精简](features/beautify/hide-me-tab-page-items.md)
 * [对话框窗口级背景模糊](features/beautify/apply-dialog-background-blur.md)
 * [资料卡居中](features/beautify/center-profile-card.md)
 * [DPI 修改](features/beautify/custom-dpi.md)
 * [隐藏主页下滑「最近」页](features/beautify/hide-home-screen-swipe-down-page.md)
-* [「我」页面精简](features/beautify/hide-me-tab-page-items.md)
 * [隐藏其他设备横幅](features/beautify/hide-other-devices-banner.md)
-* [莫奈引擎](features/beautify/monet-engine.md)
-* [美化首页底部导航栏](features/beautify/replace-navigation-bar.md)
 
 ## 系统与隐私
 
@@ -109,20 +109,20 @@
 * [禁用「转发截图」提示](features/system/disable-share-screenshot-toast.md)
 * [禁用 WebView 安全警告](features/system/disable-webview-safety-warnings.md)
 * [强制启用 WebView 菜单](features/system/enable-webview-features.md)
-* [虚拟定位](features/system/fake-location.md)
-* [灰度测试管理器](features/system/feature-flag-manager.md)
-* [强制平板模式](features/system/force-tablet-mode.md)
-* [隐藏模块应用](features/system/hide-module-from-app-list.md)
-* [链接跳转系统打开方式](features/system/link-external-app-jump.md)
-* [修改运动步数](features/system/modify-sports-step-count.md)
-* [省电模式](features/system/power-saver.md)
-* [预见性返回动画](features/system/predictive-back-gestures.md)
-* [阻止微信清理模块数据](features/system/prevent-module-data-deletion.md)
-* [禁止微信检测 Xposed](features/system/prevent-xposed-detection.md)
 * [二维码扫描记录](features/system/qr-code-record.md)
 * [去除文章广告](features/system/remove-article-ads.md)
 * [移除分享签名校验](features/system/remove-external-app-sharing-signature-verify.md)
 * [移除二维码扫描限制](features/system/remove-qr-code-scan-limit.md)
+* [强制平板模式](features/system/force-tablet-mode.md)
+* [链接跳转系统打开方式](features/system/link-external-app-jump.md)
+* [修改运动步数](features/system/modify-sports-step-count.md)
+* [虚拟定位](features/system/fake-location.md)
+* [灰度测试管理器](features/system/feature-flag-manager.md)
+* [隐藏模块应用](features/system/hide-module-from-app-list.md)
+* [省电模式](features/system/power-saver.md)
+* [预见性返回动画](features/system/predictive-back-gestures.md)
+* [阻止微信清理模块数据](features/system/prevent-module-data-deletion.md)
+* [禁止微信检测 Xposed](features/system/prevent-xposed-detection.md)
 * [环境伪装](features/system/spoof-environment.md)
 * [恢复旧版卡包界面](features/system/use-legacy-wallet-view.md)
 
@@ -132,17 +132,17 @@
 
 ## 公众号
 
-* [恢复旧版公众号列表](features/official_accounts/use-legacy-official-accounts-view.md)
 * [允许公众号网页多开](features/official_accounts/use-multi-webview-for-official-accounts.md)
+* [恢复旧版公众号列表](features/official_accounts/use-legacy-official-accounts-view.md)
 
 ## 小程序
 
 * [移除嵌入广告](features/miniapps/remove-embedded-ads.md)
-* [去除菜单限制](features/miniapps/remove-menu-limits.md)
 * [移除开屏广告](features/miniapps/remove-splash-ads.md)
 * [移除视频广告](features/miniapps/remove-video-ads.md)
-* [跳过启动页面](features/miniapps/skip-splash.md)
+* [去除菜单限制](features/miniapps/remove-menu-limits.md)
 * [伪装宿主版本](features/miniapps/spoof-host-version.md)
+* [跳过启动页面](features/miniapps/skip-splash.md)
 
 ## 视频号
 
@@ -151,31 +151,31 @@
 
 ## 个人资料
 
-* [移除个性签名限制](features/profile/remove-signature-limits.md)
 * [设置微信昵称](features/profile/set-profile-nickname.md)
 * [上传透明头像](features/profile/upload-transparent-avatars.md)
+* [移除个性签名限制](features/profile/remove-signature-limits.md)
 
 ## 脚本引擎
 
-* [脚本引擎 API 参考](features/scripting_js/js-api-reference.md)
 * [脚本引擎](features/scripting_js/js-scripting-hook.md)
+* [脚本引擎 API 参考](features/scripting_js/js-api-reference.md)
 * [触发器: 收到消息](features/scripting_js/on-message.md)
 * [触发器: 发起请求](features/scripting_js/on-request.md)
 * [触发器: 收到响应](features/scripting_js/on-response.md)
 
 ## 调试
 
-* [复制调试信息](features/debug/copy-wechat-debug-info.md)
 * [崩溃拦截](features/debug/crash-interceptor.md)
-* [崩溃日志查看器](features/debug/crash-logs-viewer.md)
-* [测试](features/debug/experiments.md)
-* [启动微信内部 URL](features/debug/launch-internal-urls.md)
 * [崩溃拦截 (Native)](features/debug/native-crash-interceptor.md)
+* [崩溃日志查看器](features/debug/crash-logs-viewer.md)
+* [复制调试信息](features/debug/copy-wechat-debug-info.md)
+* [启动微信内部 URL](features/debug/launch-internal-urls.md)
 * [内存分析](features/debug/profile-memory.md)
 * [重定向微信日志](features/debug/redirect-host-logs.md)
 * [重置适配信息](features/debug/reset-dex-cache.md)
 * [发包调试](features/debug/send-packet.md)
 * [测试崩溃](features/debug/trigger-crash.md)
+* [测试](features/debug/experiments.md)
 
 ## 娱乐
 
