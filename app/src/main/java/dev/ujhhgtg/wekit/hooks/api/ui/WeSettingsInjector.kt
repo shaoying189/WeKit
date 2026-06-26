@@ -254,7 +254,7 @@ object WeSettingsInjector : ApiHookItem(), IResolveDex {
                 methodSetKey.method.invoke(prefInstance, PREFS_KEY)
                 methodSetTitle.method.invoke(prefInstance, PREFS_TITLE)
 
-                val prefScreen = context.reflekt().invokeMethod("getPreferenceScreen")
+                val prefScreen = context.reflekt().invokeMethod("getPreferenceScreen", superclass = true)
 
                 methodAddPref.method.invoke(prefScreen, prefInstance, 0)
 
