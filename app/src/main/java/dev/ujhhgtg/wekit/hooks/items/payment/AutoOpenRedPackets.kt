@@ -176,7 +176,7 @@ object AutoOpenRedPackets : ClickableHookItem(), WeDatabaseListenerApi.IInsertLi
             val displayName = WeDatabaseApi.getDisplayName(info.talker)
             val isGroup = info.talker.endsWith("@chatroom")
             val sourceLabel = if (isGroup) "群组" else "私聊"
-            showToast("抢到${sourceLabel}中「${displayName}」的红包 ¥${displayAmount}")
+            showToast("抢到${sourceLabel}「${displayName}」中的红包 ¥${displayAmount}")
         }
     }
 
@@ -199,7 +199,7 @@ object AutoOpenRedPackets : ClickableHookItem(), WeDatabaseListenerApi.IInsertLi
             if (packetUseWhitelist) {
                 if (talker !in packetWhitelist) return
             } else {
-                if (talker !in packetBlacklist) return
+                if (talker in packetBlacklist) return
             }
 
             val content = values.getAsString("content") ?: return
@@ -375,7 +375,7 @@ object AutoOpenRedPackets : ClickableHookItem(), WeDatabaseListenerApi.IInsertLi
                 },
                 confirmButton = {
                     Button(onClick = {
-                        AutoOpenRedPackets.packetNotif = notification
+                        packetNotif = notification
                         packetSelf = self
                         packetDelayCustom = delayInput.ifBlank { "300" }
                         packetUseWhitelist = useWhitelist

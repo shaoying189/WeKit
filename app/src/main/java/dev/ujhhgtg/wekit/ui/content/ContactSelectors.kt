@@ -185,7 +185,8 @@ fun BaseContactSelector(
                                         contentScale = ContentScale.Crop,
                                         modifier = Modifier
                                             .size(32.dp)
-                                            .clip(RoundedCornerShape(6.dp))
+                                            .clip(RoundedCornerShape(6.dp)),
+                                        imageLoader = GlobalImageLoader
                                     )
                                     Spacer(modifier = Modifier.width(12.dp))
 
