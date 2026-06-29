@@ -8,6 +8,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import dev.ujhhgtg.reflekt.reflekt
 import dev.ujhhgtg.wekit.dexkit.abc.IResolveDex
 import dev.ujhhgtg.wekit.dexkit.dsl.dexMethod
 import dev.ujhhgtg.wekit.features.core.ClickableFeature
@@ -18,7 +19,6 @@ import dev.ujhhgtg.wekit.ui.content.Button
 import dev.ujhhgtg.wekit.ui.content.TextButton
 import dev.ujhhgtg.wekit.ui.utils.showComposeDialog
 import dev.ujhhgtg.wekit.utils.reflection.BInt
-import dev.ujhhgtg.reflekt.reflekt
 
 @Feature(name = "移除消息菜单项", categories = ["聊天"], description = "从消息的长按菜单中移除指定名称的菜单项")
 object RemoveChatMessageContextMenuItems : ClickableFeature(), IResolveDex {
@@ -57,7 +57,7 @@ object RemoveChatMessageContextMenuItems : ClickableFeature(), IResolveDex {
     }
     private const val KEY_REMOVED_ITEM_NAMES = "removed_menu_item_names"
     private const val DEFAULT_REMOVED_ITEM_NAMES =
-        "收藏,总结,提醒,翻译,搜一搜,编辑,打开,相关表情,合拍,查看专辑,静音播放,听筒播放,背景播放"
+        "收藏,总结,提醒,翻译,搜一搜,编辑,打开,相关表情,合拍,查看专辑,静音播放,听筒播放,背景播放,从当前听"
 
     override fun onEnable() {
         methodAddMenuItem1.hookAfter {
