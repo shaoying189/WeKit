@@ -26,7 +26,7 @@ object ModuleLoader {
     @JvmStatic
     fun init(
         hostDataDir: String,
-        hostClassLoader: ClassLoader,
+        initialClassLoader: ClassLoader,
         loaderService: ILoaderService,
         hookBridge: IHookBridge?,
         modulePath: String,
@@ -37,7 +37,7 @@ object ModuleLoader {
 
         WeLogger.i(TAG, "loading in entry point ${loaderService.entryPointName}")
         runCatching {
-            UnifiedEntryPoint.entry(loaderService, hookBridge, hostClassLoader, modulePath)
+            UnifiedEntryPoint.entry(loaderService, hookBridge, initialClassLoader, modulePath)
         }.onFailure { WeLogger.e(TAG, "UnifiedEntryPoint failed", it) }
     }
 

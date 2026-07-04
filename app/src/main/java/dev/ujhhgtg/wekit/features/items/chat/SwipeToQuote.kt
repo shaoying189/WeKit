@@ -1,8 +1,10 @@
 package dev.ujhhgtg.wekit.features.items.chat
 
+import android.annotation.SuppressLint
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.animation.OvershootInterpolator
 import de.robv.android.xposed.XC_MethodHook
@@ -24,36 +26,58 @@ import kotlin.math.abs
 object SwipeToQuote : SwitchFeature(), IResolveDex,
     WeChatMessageViewApi.ICreateViewListener {
 
-    // Mutable per-view gesture state, kept off the heap as long as the view lives
+    // Mutable per-view gesture state. RecyclerView recycles message views, so chattingContext is
+    // refreshed on every onBindView (see onCreateView) rather than captured once.
     private class SwipeState(
-        val chattingContext: Any,
+        val touchSlop: Int,
         val triggerThreshold: Float,
+        var chattingContext: Any? = null,
         var startX: Float = 0f,
         var startY: Float = 0f,
         var isDragging: Boolean = false,
         var triggered: Boolean = false,
     )
 
-    // WeakHashMap: entries are automatically removed when the View is GC'd
-    // (RecyclerView recycles views, so this stays small in practice)
+    // WeakHashMap: entries are removed automatically once the recycled row view is GC'd.
     private val states: MutableMap<View, SwipeState> =
         Collections.synchronizedMap(WeakHashMap())
 
     private val springInterpolator = OvershootInterpolator(1.3f)
+
+    // com.tencent.mm.ui.chatting.viewitems.ChattingItemContainer (obfuscated: xg / li). This
+    // RelativeLayout is the SHARED root of every message item type (each ChattingItem.F() wraps its
+    // layout in `new <this>(inflater, layoutRes)`), and it is exactly the itemView handed to
+    // onCreateView below. The clickable / long-pressable message bubble is a CHILD of it, so the
+    // container only sees MOVE events after it intercepts them — which is why we must hook
+    // onInterceptTouchEvent here rather than rely on an OnTouchListener alone. Scoping the hook to
+    // this one class (instead of global ViewGroup) keeps the blast radius tiny.
+    private val classChattingItemContainer by dexClass {
+        searchPackages("com.tencent.mm.ui.chatting.viewitems")
+        matcher {
+            usingEqStrings(
+                "MicroMsg.ChattingItemContainer",
+                "warn!!! cacheSize:%s sysSize:%s"
+            )
+        }
+    }
 
     // ── lifecycle ────────────────────────────────────────────────────────────
 
     override fun onEnable() {
         WeChatMessageViewApi.addListener(this)
 
-        ViewGroup::class.reflekt()
+        // Steal the horizontal-left drag from the child bubble before it becomes a click / long
+        // press. onInterceptTouchEvent is the ONLY place the container can claim a MOVE stream that a
+        // clickable child already owns; an OnTouchListener can't intercept. Once we return true here,
+        // the tail (MOVE/UP/CANCEL) is delivered to the container itself and handled by the
+        // OnTouchListener attached in onCreateView.
+        classChattingItemContainer.reflekt()
             .firstMethod { name = "onInterceptTouchEvent" }
             .hookAfter {
-                val v = thisObject as ViewGroup
+                val v = thisObject as? ViewGroup ?: return@hookAfter
                 val s = states[v] ?: return@hookAfter
                 val event = args[0] as MotionEvent
-
-                when (event.action) {
+                when (event.actionMasked) {
                     MotionEvent.ACTION_DOWN -> {
                         s.startX = event.rawX
                         s.startY = event.rawY
@@ -64,59 +88,12 @@ object SwipeToQuote : SwitchFeature(), IResolveDex,
                     MotionEvent.ACTION_MOVE -> {
                         val dx = event.rawX - s.startX
                         val dy = event.rawY - s.startY
-                        if (!s.isDragging && abs(dx) > abs(dy) && dx < 0) {
+                        if (!s.isDragging && dx < 0 && abs(dx) > s.touchSlop && abs(dx) > abs(dy)) {
                             s.isDragging = true
                             v.parent?.requestDisallowInterceptTouchEvent(true)
                         }
+                        // Once dragging, claim the stream so the tail routes to our OnTouchListener.
                         if (s.isDragging) result = true
-                    }
-
-                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                        s.isDragging = false
-                    }
-                }
-            }
-
-        View::class.reflekt()
-            .firstMethod { name = "onTouchEvent"; superclass() }
-            .hookAfter {
-                val v = thisObject as View
-                val s = states[v] ?: return@hookAfter
-                val event = args[0] as MotionEvent
-
-                when (event.action) {
-                    MotionEvent.ACTION_MOVE -> {
-                        if (s.isDragging) {
-                            val rawDx = event.rawX - s.startX
-                            v.translationX = rawDx.coerceIn(-s.triggerThreshold, 0f)
-                            if (!s.triggered && rawDx < -s.triggerThreshold) {
-                                s.triggered = true
-                                v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                            }
-                            result = true
-                        }
-                    }
-
-                    MotionEvent.ACTION_UP -> {
-                        if (s.isDragging) {
-                            v.animate()
-                                .translationX(0f)
-                                .setDuration(250)
-                                .setInterpolator(springInterpolator)
-                                .start()
-                            if (s.triggered) onSwipeLeft(v, s.chattingContext)
-                            v.parent?.requestDisallowInterceptTouchEvent(false)
-                            s.isDragging = false
-                            result = true
-                        }
-                    }
-
-                    MotionEvent.ACTION_CANCEL -> {
-                        if (s.isDragging) {
-                            v.animate().translationX(0f).setDuration(150).start()
-                            v.parent?.requestDisallowInterceptTouchEvent(false)
-                            s.isDragging = false
-                        }
                     }
                 }
             }
@@ -127,18 +104,140 @@ object SwipeToQuote : SwitchFeature(), IResolveDex,
         states.clear()
     }
 
-    // ── ICreateViewListener ──────────────────────────────────────────────────
+    // ── row binding: register state + attach the swipe listener, keep context fresh ─
 
     override fun onCreateView(param: XC_MethodHook.MethodHookParam, view: View) {
-        if (states.containsKey(view)) return
         val chattingContext = WeChatMessageViewApi.getChattingContextFromParam(param)
-        states[view] = SwipeState(
-            chattingContext = chattingContext,
-            triggerThreshold = 60.dpToPx(view.context).toFloat(),
-        )
+
+        val state = states.getOrPut(view) {
+            val ctx = view.context
+            SwipeState(
+                touchSlop = ViewConfiguration.get(ctx).scaledTouchSlop,
+                triggerThreshold = 60.dpToPx(ctx).toFloat(),
+            )
+        }
+        state.chattingContext = chattingContext
+
+        // Re-install our wrapper every bind, delegating to whatever listener is currently attached
+        // (unless it is already ours), mirroring SwipeToDeleteConversation.
+        attachSwipeListener(view, state)
     }
 
-    // ── helpers ──────────────────────────────────────────────────────────────
+    // Marks our wrapper so a re-bind can tell its own listener apart from WeChat's.
+    private class SwipeTouchListener(
+        val state: SwipeState,
+        val delegate: View.OnTouchListener?,
+    ) : View.OnTouchListener {
+        @SuppressLint("ClickableViewAccessibility")
+        override fun onTouch(v: View, event: MotionEvent): Boolean {
+            val consumed = handleSwipe(v, state, event)
+            runCatching { delegate?.onTouch(v, event) }
+            return consumed
+        }
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    private fun attachSwipeListener(view: View, state: SwipeState) {
+        val current = getAttachedTouchListener(view)
+        if (current is SwipeTouchListener) return  // already wrapped for this stream
+        view.setOnTouchListener(SwipeTouchListener(state, current))
+    }
+
+    // Reads the View's current OnTouchListener out of its ListenerInfo, so we can chain to WeChat's.
+    private fun getAttachedTouchListener(view: View): View.OnTouchListener? = runCatching {
+        val info = view.reflekt()
+            .firstFieldOrNull { name = "mListenerInfo"; superclass() }
+            ?.get() ?: return null
+        info.reflekt()
+            .firstFieldOrNull { name = "mOnTouchListener" }
+            ?.get() as? View.OnTouchListener
+    }.getOrNull()
+
+    // ── gesture ──────────────────────────────────────────────────────────────
+    //
+    // This handles TWO entry paths into the same container:
+    //   • Bubble (clickable child owns ACTION_DOWN): onInterceptTouchEvent above records the start
+    //     and steals the stream once it is a left-drag, so the listener only sees MOVE onward with
+    //     isDragging already set. The DOWN branch here never runs.
+    //   • Blank area right of the bubble (no clickable descendant under the touch): ACTION_DOWN
+    //     falls through to this listener. The container is a non-clickable RelativeLayout, so we must
+    //     consume the DOWN (return true) or it receives no further MOVE events. We then detect the
+    //     drag here ourselves, since onInterceptTouchEvent is no longer called once the container is
+    //     the touch target.
+    // requestDisallowInterceptTouchEvent(true) is deferred until a left-drag is confirmed, so a
+    // vertical scroll starting on blank space still reaches the RecyclerView.
+    private fun handleSwipe(v: View, s: SwipeState, event: MotionEvent): Boolean {
+        return when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                s.startX = event.rawX
+                s.startY = event.rawY
+                s.isDragging = false
+                s.triggered = false
+                // Claim so the non-clickable container keeps receiving the stream (blank-area path).
+                true
+            }
+
+            MotionEvent.ACTION_MOVE -> {
+                if (!s.isDragging) {
+                    val dx = event.rawX - s.startX
+                    val dy = event.rawY - s.startY
+                    if (dx < 0 && abs(dx) > s.touchSlop && abs(dx) > abs(dy)) {
+                        s.isDragging = true
+                        v.parent?.requestDisallowInterceptTouchEvent(true)
+                    }
+                }
+                if (s.isDragging) {
+                    val dx = event.rawX - s.startX
+                    v.translationX = dx.coerceIn(-s.triggerThreshold, 0f)
+                    // Haptic tick tracks the live fireable state: buzz when crossing INTO the fire
+                    // zone, and re-arm when sliding back out so a re-cross buzzes again.
+                    val past = dx <= -s.triggerThreshold
+                    if (past && !s.triggered) {
+                        v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                    }
+                    s.triggered = past
+                    true
+                } else {
+                    // Not (yet) a horizontal drag; don't consume, so a vertical scroll can still be
+                    // intercepted by the RecyclerView.
+                    false
+                }
+            }
+
+            MotionEvent.ACTION_UP -> {
+                val dx = event.rawX - s.startX
+                // Decide by the FINAL position, not whether the threshold was ever crossed: sliding
+                // past the threshold and then back is an intentional cancel, so it must NOT fire.
+                val fire = s.isDragging && dx <= -s.triggerThreshold
+                if (s.isDragging) {
+                    v.animate()
+                        .translationX(0f)
+                        .setDuration(250)
+                        .setInterpolator(springInterpolator)
+                        .start()
+                    v.parent?.requestDisallowInterceptTouchEvent(false)
+                    s.isDragging = false
+                    if (fire) s.chattingContext?.let { onSwipeLeft(v, it) }
+                    true
+                } else {
+                    false
+                }
+            }
+
+            MotionEvent.ACTION_CANCEL -> {
+                if (s.isDragging) {
+                    v.animate().translationX(0f).setDuration(150).start()
+                    v.parent?.requestDisallowInterceptTouchEvent(false)
+                    s.isDragging = false
+                }
+                false
+            }
+
+            else -> false
+        }
+    }
+
+    // ── quote on swipe ─────────────────────────────────────────────────────────
 
     private fun onSwipeLeft(originalView: View, chattingContext: Any) {
         val apiMan = chattingContext.reflekt()

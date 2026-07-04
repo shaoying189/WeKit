@@ -8,6 +8,8 @@ import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -162,6 +164,22 @@ object ReplaceNavigationBar : ClickableFeature(), IResolveDex {
 
             val selectedPageIndexState = mutableIntStateOf(0)
             val scrollOffsetState = mutableFloatStateOf(0f)
+            // Settled page index: only advances once the pager comes to rest on a page
+            // (positionOffset == 0). The floating bar highlights from this so the tab
+            // change happens *after* the content stops in both directions. The raw
+            // `position` above flips to the target the instant a backward swipe starts,
+            // which would move the pill early; the NavigationBar branch still needs that
+            // raw value for its scroll-driven color cross-fade.
+            val settledPageIndexState = mutableIntStateOf(0)
+            // Target page as soon as it's decided: immediately on a tab tap, and at the
+            // half-way crossing during a finger swipe. Drives the discrete spring so a tap
+            // still bulges + slides the pill instead of teleporting.
+            val targetPageIndexState = mutableIntStateOf(0)
+            // True only while the pager is being moved by a finger (SCROLL_STATE_DRAGGING),
+            // through to the follow-on settle. A tab tap smooth-scrolls (SETTLING) without
+            // ever passing through DRAGGING, so it stays false and takes the spring path.
+            val isSwipingState = mutableStateOf(false)
+            var pageDidDrag = false
 
             tabsAdapter.reflekt()
                 .firstMethod { name = "onPageScrolled" }
@@ -171,6 +189,33 @@ object ReplaceNavigationBar : ClickableFeature(), IResolveDex {
 
                     selectedPageIndexState.intValue = position
                     scrollOffsetState.floatValue = positionOffset
+                    if (positionOffset == 0f) {
+                        settledPageIndexState.intValue = position
+                    }
+                }
+
+            tabsAdapter.reflekt()
+                .firstMethod { name = "onPageSelected" }
+                .hookBefore {
+                    targetPageIndexState.intValue = args[0] as Int
+                }
+
+            tabsAdapter.reflekt()
+                .firstMethod { name = "onPageScrollStateChanged" }
+                .hookBefore {
+                    when (args[0] as Int) {
+                        1 -> { // DRAGGING: finger is moving the pager
+                            pageDidDrag = true
+                            isSwipingState.value = true
+                        }
+                        2 -> { // SETTLING: keep tracking only if this settle came from a drag
+                            isSwipingState.value = pageDidDrag
+                        }
+                        else -> { // IDLE
+                            isSwipingState.value = false
+                            pageDidDrag = false
+                        }
+                    }
                 }
 
             val useFloating = useFloating
@@ -185,6 +230,8 @@ object ReplaceNavigationBar : ClickableFeature(), IResolveDex {
                         AppTheme {
                             val view = LocalView.current
                             var selectedIndex by selectedPageIndexState
+                            val settledIndex by settledPageIndexState
+                            val targetIndex by targetPageIndexState
                             val unreadCount by unreadCountState
                             val finderUnreadCount by finderUnreadCountState
                             val showFinderDot by showFinderDotState
@@ -222,7 +269,6 @@ object ReplaceNavigationBar : ClickableFeature(), IResolveDex {
                                         }
 
                                         val showFilled = if (offset < 0.5f) isSelected else isNext
-                                        val currentIcon = if (showFilled) item.filled else item.outlined
 
                                         NavigationBarItem(
                                             selected = isSelected && offset < 0.5f,
@@ -254,11 +300,17 @@ object ReplaceNavigationBar : ClickableFeature(), IResolveDex {
                                                         }
                                                     }
                                                 ) {
-                                                    Icon(
-                                                        imageVector = currentIcon,
-                                                        contentDescription = item.label,
-                                                        tint = tint
-                                                    )
+                                                    Crossfade(
+                                                        targetState = showFilled,
+                                                        animationSpec = tween(200),
+                                                        label = "navIcon"
+                                                    ) { filled ->
+                                                        Icon(
+                                                            imageVector = if (filled) item.filled else item.outlined,
+                                                            contentDescription = item.label,
+                                                            tint = tint
+                                                        )
+                                                    }
                                                 }
                                             },
                                             label = null,
@@ -289,7 +341,15 @@ object ReplaceNavigationBar : ClickableFeature(), IResolveDex {
                                                 bottom = 12.dp + WindowInsets.navigationBars.asPaddingValues()
                                                     .calculateBottomPadding()
                                             ),
-                                        selectedIndex = { selectedIndex },
+                                        // Spring target: on a tap this is the tapped tab, so the
+                                        // pill bulges and slides across. During a swipe the gate
+                                        // below hands position control to `progress` instead.
+                                        selectedIndex = { targetIndex },
+                                        // Drive the indicator from the pager's live fractional
+                                        // scroll position so the pill tracks the content 1:1 in
+                                        // both directions, like the non-floating bar's crossfade.
+                                        progress = { selectedIndex + scrollOffsetState.floatValue },
+                                        isTracking = { isSwipingState.value },
                                         onSelected = { navigateToTab(it) },
                                         backdrop = rememberLayerBackdrop(),
                                         tabsCount = ICONS.size,
@@ -302,8 +362,7 @@ object ReplaceNavigationBar : ClickableFeature(), IResolveDex {
                                         )
                                     ) {
                                         ICONS.forEachIndexed { index, item ->
-                                            val isSelected = index == selectedIndex
-                                            val currentIcon = if (isSelected) item.filled else item.outlined
+                                            val isSelected = index == settledIndex
 
                                             FloatingBottomBarItem(
                                                 onClick = {
@@ -335,10 +394,16 @@ object ReplaceNavigationBar : ClickableFeature(), IResolveDex {
                                                         }
                                                     }
                                                 ) {
-                                                    Icon(
-                                                        imageVector = currentIcon,
-                                                        contentDescription = item.label
-                                                    )
+                                                    Crossfade(
+                                                        targetState = isSelected,
+                                                        animationSpec = tween(200),
+                                                        label = "navIconFloating"
+                                                    ) { selected ->
+                                                        Icon(
+                                                            imageVector = if (selected) item.filled else item.outlined,
+                                                            contentDescription = item.label
+                                                        )
+                                                    }
                                                 }
                                                 if (!hideLabels) {
                                                     Text(
@@ -366,6 +431,16 @@ object ReplaceNavigationBar : ClickableFeature(), IResolveDex {
                 // FrameLayout as an overlay on top of the content.
                 bottomTabViewGroup.removeAllViews()
                 bottomTabViewGroup.visibility = View.GONE
+
+                // The pill scales up (press bulge ~1.39x plus velocity overshoot) via a
+                // graphicsLayer, so it draws beyond the ComposeView's WRAP_CONTENT bounds.
+                // The bottom overdraw lands in the padding/inset gap, but the top overdraw
+                // extends above the ComposeView and would be clipped by the Android view
+                // hierarchy. Disable child/padding clipping on the parent so it renders.
+                viewParent.clipChildren = false
+                viewParent.clipToPadding = false
+                composeView.clipChildren = false
+                composeView.clipToPadding = false
 
                 viewParent.addView(
                     composeView,

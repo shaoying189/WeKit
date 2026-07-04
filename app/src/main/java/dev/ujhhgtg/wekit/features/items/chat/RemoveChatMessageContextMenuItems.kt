@@ -13,7 +13,7 @@ import dev.ujhhgtg.wekit.dexkit.abc.IResolveDex
 import dev.ujhhgtg.wekit.dexkit.dsl.dexMethod
 import dev.ujhhgtg.wekit.features.core.ClickableFeature
 import dev.ujhhgtg.wekit.features.core.Feature
-import dev.ujhhgtg.wekit.preferences.WePrefs
+import dev.ujhhgtg.wekit.preferences.WePrefs.Companion.prefOption
 import dev.ujhhgtg.wekit.ui.content.AlertDialogContent
 import dev.ujhhgtg.wekit.ui.content.Button
 import dev.ujhhgtg.wekit.ui.content.TextButton
@@ -55,50 +55,31 @@ object RemoveChatMessageContextMenuItems : ClickableFeature(), IResolveDex {
             returnType(MenuItem::class.java)
         }
     }
-    private const val KEY_REMOVED_ITEM_NAMES = "removed_menu_item_names"
-    private const val DEFAULT_REMOVED_ITEM_NAMES =
+
+    private var removedItemNames by prefOption(
+        "removed_menu_item_names",
         "收藏,总结,提醒,翻译,搜一搜,编辑,打开,相关表情,合拍,查看专辑,静音播放,听筒播放,背景播放,从当前听"
+    )
 
     override fun onEnable() {
-        methodAddMenuItem1.hookAfter {
-            val name = args[3] as CharSequence
-            val removedNames =
-                WePrefs.getStringOrDef(KEY_REMOVED_ITEM_NAMES, DEFAULT_REMOVED_ITEM_NAMES)
-                    .split(',')
+        listOf(methodAddMenuItem1, methodAddMenuItem2).forEach {
+            it.hookAfter {
+                val name = args[3] as CharSequence
+                val removedNames = removedItemNames.split(',')
 
-            if (removedNames.contains(name)) {
-                val list = thisObject.reflekt()
-                    .firstField { type = List::class }
-                    .get()!! as ArrayList<*>
-                list.removeAt(list.size - 1)
-            }
-        }
-
-        methodAddMenuItem2.hookAfter {
-            val name = args[3] as CharSequence
-            val removedNames =
-                WePrefs.getStringOrDef(KEY_REMOVED_ITEM_NAMES, DEFAULT_REMOVED_ITEM_NAMES)
-                    .split(',')
-
-            if (removedNames.contains(name)) {
-                val list = thisObject.reflekt()
-                    .firstField { type = List::class }
-                    .get()!! as ArrayList<*>
-                list.removeAt(list.size - 1)
+                if (removedNames.contains(name)) {
+                    val list = thisObject.reflekt()
+                        .firstField { type = List::class }
+                        .get()!! as ArrayList<*>
+                    list.removeAt(list.size - 1)
+                }
             }
         }
     }
 
     override fun onClick(context: Context) {
         showComposeDialog(context) {
-            var removedNames by remember {
-                mutableStateOf(
-                    WePrefs.getStringOrDef(
-                        KEY_REMOVED_ITEM_NAMES,
-                        DEFAULT_REMOVED_ITEM_NAMES
-                    )
-                )
-            }
+            var removedNames by remember { mutableStateOf(removedItemNames) }
             AlertDialogContent(
                 title = { Text("移除消息菜单项") },
                 text = {
@@ -110,10 +91,7 @@ object RemoveChatMessageContextMenuItems : ClickableFeature(), IResolveDex {
                 dismissButton = { TextButton(onDismiss) { Text("取消") } },
                 confirmButton = {
                     Button(onClick = {
-                        WePrefs.putString(
-                            KEY_REMOVED_ITEM_NAMES,
-                            removedNames
-                        )
+                        removedItemNames = removedNames
                         onDismiss()
                     }) { Text("确定") }
                 })

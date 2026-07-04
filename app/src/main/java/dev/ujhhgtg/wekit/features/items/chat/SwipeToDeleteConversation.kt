@@ -227,10 +227,10 @@ object SwipeToDeleteConversation : ClickableFeature(), IResolveDex {
             gravity = Gravity.CENTER
             setBackgroundColor(bg)
             maxLines = 1
-            layoutParams = FrameLayout.LayoutParams(
-                BUTTON_WIDTH_DP.dpToPx(context),
-                FrameLayout.LayoutParams.MATCH_PARENT
-            )
+            // Start at width 0: the buttons only ever get a real width from applyTranslation once the
+            // row is measured. A non-zero initial width would flash as a colored box at x=0 before the
+            // first layout pass runs applyTranslation (see the rowW guard there).
+            layoutParams = FrameLayout.LayoutParams(0, FrameLayout.LayoutParams.MATCH_PARENT)
             isClickable = true
             setOnClickListener { onTap() }
         }
@@ -258,10 +258,17 @@ object SwipeToDeleteConversation : ClickableFeature(), IResolveDex {
         val hide = s.hideBtn ?: return
         val del = s.delBtn ?: return
 
+        // Hide the whole panel when fully closed, independent of measurement: this runs BEFORE the
+        // rowW guard below, so even if the row isn't measured yet (rowW == 0 at setup time) the panel
+        // can't flash its buttons as colored boxes or be tapped. It's re-shown as soon as a drag
+        // begins (reveal > 0).
+        val reveal = (-tx).coerceAtLeast(0f)
+        s.panel?.visibility = if (reveal <= 0f) View.GONE else View.VISIBLE
+        if (reveal <= 0f) return
+
         val rowW = (s.panel?.width?.takeIf { it > 0 } ?: content.width).toFloat()
         if (rowW <= 0f) return
 
-        val reveal = (-tx).coerceAtLeast(0f)
         val stripLeft = rowW - reveal
         val half = reveal / 2f
 

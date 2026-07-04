@@ -3,10 +3,10 @@ package dev.ujhhgtg.wekit.features.items.chat
 import android.content.Context
 import android.util.AttributeSet
 import android.view.View
-import android.widget.EditText
 import android.widget.ImageButton
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,8 +14,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
@@ -31,8 +34,10 @@ import androidx.lifecycle.lifecycleScope
 import com.composables.icons.materialsymbols.MaterialSymbols
 import com.composables.icons.materialsymbols.outlined.Alternate_email
 import com.composables.icons.materialsymbols.outlined.Send_time_extension
+import com.composables.icons.materialsymbols.outlined.Text_to_speech
 import com.composables.icons.materialsymbols.outlined.Voice_chat
 import com.tencent.mm.pluginsdk.ui.chat.ChatFooter
+import dev.ujhhgtg.comptime.nameOf
 import dev.ujhhgtg.reflekt.reflekt
 import dev.ujhhgtg.wekit.activity.TransparentActivity
 import dev.ujhhgtg.wekit.dexkit.abc.IResolveDex
@@ -44,6 +49,8 @@ import dev.ujhhgtg.wekit.features.api.net.WePacketHelper
 import dev.ujhhgtg.wekit.features.api.ui.WeCurrentConversationApi
 import dev.ujhhgtg.wekit.features.core.Feature
 import dev.ujhhgtg.wekit.features.core.SwitchFeature
+import dev.ujhhgtg.wekit.features.items.chat.ChatInputBarEnhancements.ttsVoice
+import dev.ujhhgtg.wekit.preferences.WePrefs
 import dev.ujhhgtg.wekit.ui.content.AlertDialogContent
 import dev.ujhhgtg.wekit.ui.content.Button
 import dev.ujhhgtg.wekit.ui.content.TextButton
@@ -52,12 +59,15 @@ import dev.ujhhgtg.wekit.ui.utils.findViewWhich
 import dev.ujhhgtg.wekit.ui.utils.findViewsWhich
 import dev.ujhhgtg.wekit.ui.utils.showComposeDialog
 import dev.ujhhgtg.wekit.utils.AudioUtils
+import dev.ujhhgtg.wekit.utils.EdgeTtsClient
+import dev.ujhhgtg.wekit.utils.WeLogger
 import dev.ujhhgtg.wekit.utils.android.showToast
 import dev.ujhhgtg.wekit.utils.android.showToastSuspend
 import dev.ujhhgtg.wekit.utils.coerceToInt
 import dev.ujhhgtg.wekit.utils.fileExtension
 import dev.ujhhgtg.wekit.utils.fs.KnownPaths
 import dev.ujhhgtg.wekit.utils.strings.isGroupChatWxId
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -70,8 +80,35 @@ import kotlin.io.path.div
 import kotlin.io.path.outputStream
 import android.widget.Button as AndroidButton
 
-@Feature(name = "聊天输入栏增强", categories = ["聊天"], description = "为聊天输入栏添加更多功能\n1. 在聊天界面长按「发送」或「加号菜单」按钮打开菜单\n菜单功能: 「发送卡片消息」「@所有人」\n2. 长按「语音」按钮发送自定义语音文件 (SILK 或 MP3)")
+@Feature(
+    name = "聊天输入栏增强",
+    categories = ["聊天"],
+    description = "为聊天输入栏添加更多功能\n1. 在聊天界面长按「发送」或「加号菜单」按钮打开菜单\n菜单功能: 「发送语音文件」「文本转语音发送 (长按选音色)」「发送卡片消息」「@所有人」\n2. 长按「语音」按钮发送自定义语音文件 (SILK 或 MP3)"
+)
 object ChatInputBarEnhancements : SwitchFeature(), IResolveDex {
+
+    // 文本转语音可选音色 (Edge TTS voice name -> 展示名称)。
+    private val TTS_VOICES = listOf(
+        "zh-CN-XiaoxiaoNeural" to "晓晓 (女, 温柔)",
+        "zh-CN-XiaoyiNeural" to "晓伊 (女, 活泼)",
+        "zh-CN-YunxiNeural" to "云希 (男, 阳光)",
+        "zh-CN-YunyangNeural" to "云扬 (男, 播报)",
+        "zh-CN-YunjianNeural" to "云健 (男, 浑厚)",
+        "zh-CN-YunxiaNeural" to "云夏 (男, 少年)",
+        "zh-CN-liaoning-XiaobeiNeural" to "晓北 (女, 东北话)",
+        "zh-CN-shaanxi-XiaoniNeural" to "晓妮 (女, 陕西话)",
+        "zh-HK-HiuMaanNeural" to "曉曼 (女, 粤语)",
+        "zh-HK-WanLungNeural" to "雲龍 (男, 粤语)",
+        "zh-TW-HsiaoChenNeural" to "曉臻 (女, 台湾)",
+        "zh-TW-YunJheNeural" to "雲哲 (男, 台湾)",
+        "en-US-AriaNeural" to "Aria (女, 英语)",
+        "en-US-GuyNeural" to "Guy (男, 英语)",
+        "ja-JP-NanamiNeural" to "七海 (女, 日语)",
+    )
+
+    private const val DEFAULT_TTS_VOICE = "zh-CN-XiaoxiaoNeural"
+
+    private var ttsVoice by WePrefs.prefOption("chat_tts_voice", DEFAULT_TTS_VOICE)
 
     val methodSendMessage by dexMethod {
         searchPackages("com.tencent.mm.pluginsdk.ui.chat")
@@ -122,6 +159,32 @@ object ChatInputBarEnhancements : SwitchFeature(), IResolveDex {
                                         }
 
                                         ActionItem(
+                                            icon = MaterialSymbols.Outlined.Text_to_speech,
+                                            label = "文本转语音发送 (长按选音色)",
+                                            onLongClick = {
+                                                // 延迟到下一帧: combinedClickable 在 onLongClick 返回后还会
+                                                // 读取 CompositionLocal 做触感反馈, 若此处同步 onDismiss 会
+                                                // 立刻卸载节点导致 "Modifier node is not currently attached" 崩溃。
+                                                view.post {
+                                                    showVoicePicker(context)
+                                                }
+                                            }
+                                        ) {
+                                            onDismiss()
+                                            val currentConv = WeCurrentConversationApi.value
+                                            val content = chatFooter.lastText
+
+                                            if (content.isEmpty()) {
+                                                showToast("输入内容为空!")
+                                                return@ActionItem
+                                            }
+
+                                            synthesizeAndSendVoice(currentConv, content, ttsVoice) {
+                                                chatFooter.lastText = ""
+                                            }
+                                        }
+
+                                        ActionItem(
                                             icon = MaterialSymbols.Outlined.Send_time_extension,
                                             label = "发送卡片消息"
                                         ) {
@@ -140,7 +203,7 @@ object ChatInputBarEnhancements : SwitchFeature(), IResolveDex {
                                                 return@ActionItem
                                             }
 
-                                            chatFooter.findViewWhich<EditText> { view is EditText }?.setText("")
+                                            chatFooter.lastText = ""
                                         }
 
                                         ActionItem(
@@ -172,7 +235,8 @@ object ChatInputBarEnhancements : SwitchFeature(), IResolveDex {
                                                     put("4", System.currentTimeMillis() / 1000)
                                                     put("5", -388413336)
                                                     put(
-                                                        "6", """<msgsource><atuserlist><![CDATA[${contacts.joinToString(",") { c -> c.wxId }}]]></atuserlist><pua>1</pua><alnode><cf>5</cf><inlenlist>73</inlenlist></alnode><eggIncluded>1</eggIncluded></msgsource>"""
+                                                        "6",
+                                                        """<msgsource><atuserlist><![CDATA[${contacts.joinToString(",") { c -> c.wxId }}]]></atuserlist><pua>1</pua><alnode><cf>5</cf><inlenlist>73</inlenlist></alnode><eggIncluded>1</eggIncluded></msgsource>"""
                                                     )
                                                 }
                                             }
@@ -278,6 +342,44 @@ object ChatInputBarEnhancements : SwitchFeature(), IResolveDex {
                 }
             }
     }
+
+    /** 弹出音色单选列表, 选中即用 [WePrefs] 持久化到 [ttsVoice]。 */
+    private fun showVoicePicker(context: Context) {
+        showComposeDialog(context) {
+            var selected by remember { mutableStateOf(ttsVoice) }
+            AlertDialogContent(
+                title = { Text("选择音色") },
+                text = {
+                    Column(Modifier.verticalScroll(rememberScrollState())) {
+                        TTS_VOICES.forEach { (voice, label) ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { selected = voice }
+                                    .padding(vertical = 10.dp, horizontal = 4.dp)
+                            ) {
+                                RadioButton(
+                                    selected = selected == voice,
+                                    onClick = { selected = voice }
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(label, style = MaterialTheme.typography.bodyLarge)
+                            }
+                        }
+                    }
+                },
+                dismissButton = { TextButton(onDismiss) { Text("取消") } },
+                confirmButton = {
+                    Button(onClick = {
+                        ttsVoice = selected
+                        showToast("音色已保存")
+                        onDismiss()
+                    }) { Text("确定") }
+                }
+            )
+        }
+    }
 }
 
 private fun selectAndSendVoice(context: Context, currentConv: String) {
@@ -364,17 +466,67 @@ private fun selectAndSendVoice(context: Context, currentConv: String) {
     }
 }
 
+/**
+ * 用 [EdgeTtsClient] 把文本合成为 MP3, 转成 SILK 后作为语音消息发送。
+ * 全程在 IO 线程执行, 完成后回到主线程执行 [onSent] (例如清空输入框)。
+ */
+private fun synthesizeAndSendVoice(
+    currentConv: String,
+    text: String,
+    voice: String,
+    onSent: () -> Unit,
+) {
+    CoroutineScope(Dispatchers.IO).launch {
+        showToastSuspend("正在合成语音...")
+        val mp3Path = KnownPaths.moduleCache / "tts_tmp.mp3"
+        val silkPath = KnownPaths.moduleCache / "tts_conv_tmp"
+        try {
+            EdgeTtsClient.synthesizeToMp3(text, mp3Path, voice = voice).onFailure {
+                WeLogger.d(nameOf(ChatInputBarEnhancements), "failed to synthesize voice", it)
+                showToastSuspend("语音合成失败! 错因: ${it.message}")
+                return@launch
+            }
+
+            val durationMs = AudioUtils.getDurationMs(mp3Path.absolutePathString())
+            showToastSuspend("合成成功, 正在转换并发送...")
+
+            val convSuccess = AudioUtils.mp3ToSilk(
+                mp3Path.absolutePathString(),
+                silkPath.absolutePathString(),
+            )
+            if (!convSuccess) {
+                showToastSuspend("MP3 转 SILK 失败! 查看日志以了解错误详情")
+                return@launch
+            }
+
+            val success = WeMessageApi.sendVoice(
+                currentConv,
+                silkPath.absolutePathString(),
+                durationMs.coerceToInt(),
+            )
+            showToastSuspend("语音发送${if (success) "成功" else "失败!"}")
+            if (success) {
+                withContext(Dispatchers.Main) { onSent() }
+            }
+        } finally {
+            mp3Path.deleteIfExists()
+            silkPath.deleteIfExists()
+        }
+    }
+}
+
 @Composable
 private fun ActionItem(
     icon: ImageVector,
     label: String,
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 4.dp, vertical = 14.dp)
     ) {
         Icon(

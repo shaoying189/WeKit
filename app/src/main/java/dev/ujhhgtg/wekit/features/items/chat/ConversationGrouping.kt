@@ -2,6 +2,17 @@ package dev.ujhhgtg.wekit.features.items.chat
 
 import android.content.Context
 import android.widget.ListView
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.StartOffset
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -14,8 +25,11 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -25,21 +39,31 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.composables.icons.materialsymbols.MaterialSymbols
 import com.composables.icons.materialsymbols.outlined.Add
+import com.composables.icons.materialsymbols.outlined.Check
 import com.composables.icons.materialsymbols.outlined.Delete
 import com.composables.icons.materialsymbols.outlined.Edit
+import com.composables.icons.materialsymbols.outlined.Swap_vert
 import dev.ujhhgtg.comptime.This
 import dev.ujhhgtg.reflekt.reflekt
 import dev.ujhhgtg.wekit.dexkit.abc.IResolveDex
@@ -63,6 +87,7 @@ import dev.ujhhgtg.wekit.utils.WeLogger
 import dev.ujhhgtg.wekit.utils.android.showToast
 import dev.ujhhgtg.wekit.utils.fs.KnownPaths
 import dev.ujhhgtg.wekit.utils.serialization.DefaultJson
+import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.path.div
@@ -153,6 +178,15 @@ object ConversationGrouping : SwitchFeature(), IResolveDex {
                                     selectTab(null)
                                 }
                                 showToast("已删除「${group.name}」")
+                            },
+                            onReorder = { orderedIds ->
+                                val current = loadGroups()
+                                val byId = current.associateBy { it.id }
+                                val reordered = orderedIds.mapNotNull { byId[it] }
+                                // Keep any groups that somehow weren't in the ordered list appended.
+                                val missing = current.filterNot { g -> orderedIds.contains(g.id) }
+                                saveGroups(reordered + missing)
+                                groups = loadGroups()
                             }
                         )
                     }
@@ -287,89 +321,310 @@ object ConversationGrouping : SwitchFeature(), IResolveDex {
         onCreateGroup: () -> Unit,
         onEditGroup: (ChatGroup) -> Unit,
         onDeleteGroup: (ChatGroup) -> Unit,
+        onReorder: (List<String>) -> Unit,
         modifier: Modifier = Modifier,
         containerColor: Color = if (isSystemInDarkTheme()) Color(0xFF191919) else Color(0xFFF7F7F7),
     ) {
         var menuForGroupId by remember { mutableStateOf<String?>(null) }
+        // Sort (edit) mode: tabs jiggle in place and can be long-pressed to drag-reorder.
+        var sortMode by remember { mutableStateOf(false) }
+        // The working order while sorting. Seeded from `groups` on entry and mutated live as the
+        // user drags; committed via onReorder only when the check button is tapped.
+        var order by remember { mutableStateOf(groups.map { it.id }) }
+
+        // Keep the working order in sync while NOT sorting (groups added/removed/edited elsewhere).
+        LaunchedEffect(groups, sortMode) {
+            if (!sortMode) order = groups.map { it.id }
+        }
+
+        val orderedGroups = remember(order, groups) {
+            val byId = groups.associateBy { it.id }
+            order.mapNotNull { byId[it] }
+        }
 
         Box(
             modifier = modifier
                 .fillMaxWidth()
                 .background(containerColor)
         ) {
-            LazyRow(
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Fixed "全部" tab — always present, not editable / deletable.
-                item(key = "__all__") {
-                    GroupTab(
-                        label = "全部",
-                        selected = selectedGroupId == null,
-                        onClick = { onTabSelected(null) },
-                        onLongClick = { }
-                    )
-                }
-
-                items(groups, key = { it.id }) { group ->
-                    Box {
+            if (sortMode) {
+                SortableTabsRow(
+                    groups = orderedGroups,
+                    onMove = { from, to ->
+                        order = order.toMutableList().apply { add(to, removeAt(from)) }
+                    }
+                )
+            } else {
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Fixed "全部" tab — always present, not editable / deletable.
+                    item(key = "__all__") {
                         GroupTab(
-                            label = group.name,
-                            selected = selectedGroupId == group.id,
-                            onClick = { onTabSelected(group.id) },
-                            onLongClick = { menuForGroupId = group.id }
+                            label = "全部",
+                            selected = selectedGroupId == null,
+                            onClick = { onTabSelected(null) },
+                            onLongClick = { }
                         )
+                    }
 
-                        DropdownMenu(
-                            expanded = menuForGroupId == group.id,
-                            onDismissRequest = { menuForGroupId = null }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("编辑") },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = MaterialSymbols.Outlined.Edit,
-                                        contentDescription = "编辑",
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                },
-                                onClick = {
-                                    menuForGroupId = null
-                                    onEditGroup(group)
-                                }
+                    items(orderedGroups, key = { it.id }) { group ->
+                        Box {
+                            GroupTab(
+                                label = group.name,
+                                selected = selectedGroupId == group.id,
+                                onClick = { onTabSelected(group.id) },
+                                onLongClick = { menuForGroupId = group.id }
                             )
-                            DropdownMenuItem(
-                                text = { Text("删除") },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = MaterialSymbols.Outlined.Delete,
-                                        contentDescription = "删除",
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                },
-                                onClick = {
-                                    menuForGroupId = null
-                                    onDeleteGroup(group)
-                                }
+
+                            DropdownMenu(
+                                expanded = menuForGroupId == group.id,
+                                onDismissRequest = { menuForGroupId = null }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("编辑") },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = MaterialSymbols.Outlined.Edit,
+                                            contentDescription = "编辑",
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    },
+                                    onClick = {
+                                        menuForGroupId = null
+                                        onEditGroup(group)
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("排序") },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = MaterialSymbols.Outlined.Swap_vert,
+                                            contentDescription = "排序",
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    },
+                                    onClick = {
+                                        menuForGroupId = null
+                                        order = groups.map { it.id }
+                                        sortMode = true
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("删除") },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = MaterialSymbols.Outlined.Delete,
+                                            contentDescription = "删除",
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    },
+                                    onClick = {
+                                        menuForGroupId = null
+                                        onDeleteGroup(group)
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    // Trailing "+" to create a new group.
+                    item(key = "__add__") {
+                        IconButton(
+                            onClick = onCreateGroup,
+                            colors = androidx.compose.material3.IconButtonDefaults.filledTonalIconButtonColors()
+                        ) {
+                            Icon(
+                                imageVector = MaterialSymbols.Outlined.Add,
+                                contentDescription = "新建分组",
+                                modifier = Modifier.size(22.dp)
                             )
                         }
                     }
                 }
+            }
 
-                // Trailing "+" to create a new group.
-                item(key = "__add__") {
+            // In sort mode the trailing "+" turns into a "✓" that commits the new order. Overlaid on
+            // the right so it stays put regardless of how far the row scrolls.
+            if (sortMode) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 12.dp)
+                        .background(containerColor, CircleShape)
+                ) {
                     IconButton(
-                        onClick = onCreateGroup,
+                        onClick = {
+                            onReorder(order)
+                            sortMode = false
+                            showToast("已保存排序")
+                        },
                         colors = androidx.compose.material3.IconButtonDefaults.filledTonalIconButtonColors()
                     ) {
                         Icon(
-                            imageVector = MaterialSymbols.Outlined.Add,
-                            contentDescription = "新建分组",
+                            imageVector = MaterialSymbols.Outlined.Check,
+                            contentDescription = "保存排序",
                             modifier = Modifier.size(22.dp)
                         )
                     }
+                }
+            }
+        }
+    }
+
+    /**
+     * The row shown while sorting: every tab jiggles in place (iOS home-screen editing feel), and a
+     * long-press on any tab picks it up so dragging left/right reorders the row. Reordering mutates
+     * the caller's working order via [onMove]; nothing is persisted until the ✓ button is tapped.
+     *
+     * We build our own drag handling rather than using a LazyRow so we can control the pickup +
+     * live swap ourselves; the tab count is small so a plain Row of measured widths is fine.
+     */
+    @OptIn(ExperimentalFoundationApi::class)
+    @Composable
+    private fun SortableTabsRow(
+        groups: List<ChatGroup>,
+        onMove: (from: Int, to: Int) -> Unit,
+    ) {
+        val listState = rememberLazyListState()
+        val scope = rememberCoroutineScope()
+
+        // Drag state, all read live inside a single row-level gesture detector so nothing captures a
+        // stale `groups` snapshot:
+        //  - draggingIndex: the position of the picked-up tab, updated as it swaps past neighbours.
+        //  - initialOffset: the tab's layout offset at pickup (fixed for the whole drag).
+        //  - draggedDelta: raw accumulated finger movement on X since pickup.
+        // The tab's visual translation is initialOffset + draggedDelta - itsCurrentLayoutOffset, so a
+        // swap that shifts the layout is compensated automatically without rebasing draggedDelta.
+        var draggingIndex by remember { mutableIntStateOf(-1) }
+        var initialOffset by remember { mutableIntStateOf(0) }
+        var draggedDelta by remember { mutableFloatStateOf(0f) }
+
+        // Drop-settle animation: on release the tab keeps its visual offset and springs it back to 0
+        // (its slot), instead of teleporting. settleIndex marks which slot owns settleAnim.
+        var settleIndex by remember { mutableIntStateOf(-1) }
+        val settleAnim = remember { Animatable(0f) }
+
+        // The dragged tab's live layout info (found by its current index, which we keep updated).
+        fun offsetForIndex(index: Int): Float {
+            val item = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
+                ?: return 0f
+            return initialOffset + draggedDelta - item.offset
+        }
+
+        LazyRow(
+            state = listState,
+            // Reordering replaces scrolling in sort mode; disabling user scroll stops the drag from
+            // fighting the list's own horizontal scroll gesture. We auto-scroll near the edges below.
+            userScrollEnabled = false,
+            modifier = Modifier
+                .fillMaxWidth()
+                .pointerInput(Unit) {
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = { offset ->
+                            // Hit-test the touch against the live layout to pick up the right tab.
+                            val hit = listState.layoutInfo.visibleItemsInfo.firstOrNull {
+                                offset.x.toInt() in it.offset..(it.offset + it.size)
+                            }
+                            if (hit != null) {
+                                draggingIndex = hit.index
+                                initialOffset = hit.offset
+                                draggedDelta = 0f
+                            }
+                        },
+                        onDragEnd = {
+                            val landed = draggingIndex
+                            val from = offsetForIndex(landed)
+                            draggingIndex = -1
+                            // Spring the residual offset back to the slot so the tab glides home.
+                            if (landed >= 0) scope.launch {
+                                settleIndex = landed
+                                settleAnim.snapTo(from)
+                                settleAnim.animateTo(
+                                    0f,
+                                    spring(
+                                        dampingRatio = Spring.DampingRatioLowBouncy,
+                                        stiffness = Spring.StiffnessMedium
+                                    )
+                                )
+                                settleIndex = -1
+                            }
+                        },
+                        onDragCancel = { draggingIndex = -1 },
+                        onDrag = { change, amount ->
+                            change.consume()
+                            if (draggingIndex < 0) return@detectDragGesturesAfterLongPress
+                            draggedDelta += amount.x
+                            val info = listState.layoutInfo.visibleItemsInfo
+                            val cur = info.firstOrNull { it.index == draggingIndex }
+                                ?: return@detectDragGesturesAfterLongPress
+                            // Center of the dragged tab as it currently sits under the finger.
+                            val center = (cur.offset + offsetForIndex(draggingIndex) + cur.size / 2f).toInt()
+                            val target = info.firstOrNull { other ->
+                                other.index != draggingIndex &&
+                                        center in other.offset..(other.offset + other.size)
+                            }
+                            if (target != null) {
+                                onMove(draggingIndex, target.index)
+                                draggingIndex = target.index
+                            }
+                        }
+                    )
+                },
+            // Leave room on the right for the overlaid ✓ button.
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                start = 12.dp, end = 56.dp, top = 8.dp, bottom = 8.dp
+            ),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            items(groups.size, key = { groups[it].id }) { index ->
+                val group = groups[index]
+                val dragging = index == draggingIndex
+                val settling = index == settleIndex
+
+                JiggleTab(
+                    label = group.name,
+                    // Keep the lift look through the settle so scale eases out alongside the glide.
+                    dragging = dragging || settling,
+                    // Offset the jiggle phase by index so neighbouring tabs aren't perfectly in sync.
+                    phaseIndex = index,
+                    // Read at draw time so a swap-induced layout shift is reflected without a
+                    // recomposition-timing gap. While dragging: follow the finger. While settling:
+                    // the spring value. Otherwise: 0 (its slot).
+                    dragOffsetX = {
+                        when {
+                            dragging -> offsetForIndex(index)
+                            settling -> settleAnim.value
+                            else -> 0f
+                        }
+                    },
+                    modifier = Modifier
+                        .zIndex(if (dragging || settling) 1f else 0f)
+                        // Neighbours springing aside to make room animate their placement smoothly
+                        // instead of jumping. The dragged tab is excluded (it tracks the finger).
+                        .then(if (dragging || settling) Modifier else Modifier.animateItem())
+                )
+            }
+        }
+
+        // Auto-scroll the row when the dragged tab is pushed near either edge.
+        LaunchedEffect(Unit) {
+            snapshotFlow { if (draggingIndex >= 0) draggedDelta else Float.NaN }.collect { delta ->
+                if (delta.isNaN()) return@collect
+                val info = listState.layoutInfo
+                val cur = info.visibleItemsInfo.firstOrNull { it.index == draggingIndex } ?: return@collect
+                val center = cur.offset + offsetForIndex(draggingIndex) + cur.size / 2f
+                val edge = 64
+                when {
+                    center < info.viewportStartOffset + edge && listState.canScrollBackward ->
+                        scope.launch { listState.scrollBy(-12f) }
+
+                    center > info.viewportEndOffset - edge && listState.canScrollForward ->
+                        scope.launch { listState.scrollBy(12f) }
                 }
             }
         }
@@ -411,6 +666,73 @@ object ConversationGrouping : SwitchFeature(), IResolveDex {
                     style = MaterialTheme.typography.labelLarge.copy(
                         fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
                     )
+                )
+            }
+        }
+    }
+
+    /**
+     * A tab pill in sort mode: continuously rotates a couple degrees back and forth (the iOS
+     * home-screen "jiggle"), lifts and enlarges slightly while being dragged, and follows the
+     * finger horizontally via [dragOffsetX].
+     */
+    @Composable
+    private fun JiggleTab(
+        label: String,
+        dragging: Boolean,
+        phaseIndex: Int,
+        dragOffsetX: () -> Float,
+        modifier: Modifier = Modifier,
+    ) {
+        val transition = rememberInfiniteTransition(label = "jiggle")
+        // Alternate the start phase per index so neighbouring tabs jiggle out of sync.
+        val rotation by transition.animateFloat(
+            initialValue = -2.5f,
+            targetValue = 2.5f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 160, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse,
+                initialStartOffset = StartOffset(if (phaseIndex % 2 == 0) 0 else 80)
+            ),
+            label = "rotation"
+        )
+
+        // Spring the lift scale up/down so picking up and dropping ease in and out.
+        val scale by animateFloatAsState(
+            targetValue = if (dragging) 1.1f else 1f,
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMedium
+            ),
+            label = "scale"
+        )
+        // Fade the jiggle out while lifted rather than cutting it dead.
+        val jiggleDamp by animateFloatAsState(
+            targetValue = if (dragging) 0f else 1f,
+            animationSpec = tween(durationMillis = 150),
+            label = "jiggleDamp"
+        )
+
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceContainerHighest,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            shape = CircleShape,
+            modifier = modifier.graphicsLayer {
+                rotationZ = rotation * jiggleDamp
+                translationX = dragOffsetX()
+                scaleX = scale
+                scaleY = scale
+            }
+        ) {
+            Box(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .padding(horizontal = 18.dp, vertical = 9.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelLarge
                 )
             }
         }

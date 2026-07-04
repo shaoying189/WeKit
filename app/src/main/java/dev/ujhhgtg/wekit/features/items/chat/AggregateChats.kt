@@ -92,6 +92,7 @@ object AggregateChats : ClickableFeature(),
     const val FOLDER_PREFIX = "wekit_folder_"
     private const val FOLDER_CONFIG_MENU_ID = 0x0721C0DE
     private const val REMOVE_FROM_FOLDER_MENU_ID = 777020
+
     // Order pushes our item to the end of the container's context menu (its own items use 0).
     private const val REMOVE_FROM_FOLDER_MENU_ORDER = 1000
 
@@ -102,6 +103,7 @@ object AggregateChats : ClickableFeature(),
 
     // A conversation is muted when rcontact.type has bit 512 set (WeChat c01.e2.P).
     private const val CONTACT_TYPE_MUTE_BIT = 512
+
     // attrflag bit the conversation box uses to mark "has muted unread" so the homepage
     // badge renders a small dot instead of a number (WeChat w3.b / s2 require this bit set
     // alongside unReadMuteCount > 0 when unReadCount == 0).
@@ -150,7 +152,7 @@ object AggregateChats : ClickableFeature(),
     // We match the two concrete listeners (main list + search results) by their unique log tags.
     private val methodMvvmMainListItemClick by dexMethod {
         matcher {
-            usingEqStrings("MicroMsg.SelectContactMainRecycleViewUIC", "onItemClickListener data.type=")
+            usingStrings("MicroMsg.SelectContactMainRecycleViewUIC", "onItemClickListener data.type")
         }
     }
     private val methodMvvmSearchItemClick by dexMethod {
@@ -727,7 +729,8 @@ object AggregateChats : ClickableFeature(),
         }
     }
 
-    private fun hookConversationStorageParentQuery() {        if (methodConversationStorageQueryByParent.isPlaceholder) return
+    private fun hookConversationStorageParentQuery() {
+        if (methodConversationStorageQueryByParent.isPlaceholder) return
         methodConversationStorageQueryByParent.hookBefore {
             val folderId = activeFolderId ?: return@hookBefore
             val parentRef = args.getOrNull(2) as? String ?: return@hookBefore
@@ -1108,7 +1111,6 @@ object AggregateChats : ClickableFeature(),
     }
 
 
-
     private fun isFolderSchemaReady(): Boolean {
         folderSchemaReady?.let { return it }
         val result = runCatching {
@@ -1469,6 +1471,7 @@ object AggregateChats : ClickableFeature(),
                                 }
                             }
                         }
+
                         FolderType.PRESET_GROUPS -> {
                             Text("自动归拢所有群聊（当前匹配到 $matchedCount 个对话）")
                             Row(
@@ -1493,6 +1496,7 @@ object AggregateChats : ClickableFeature(),
                                 }
                             }
                         }
+
                         FolderType.PRESET_OFFICIALS -> {
                             Text("自动归拢所有公众号（当前匹配到 $matchedCount 个对话）")
                             Row(
@@ -1517,6 +1521,7 @@ object AggregateChats : ClickableFeature(),
                                 }
                             }
                         }
+
                         FolderType.SQL -> {
                             OutlinedTextField(
                                 value = selectFields,
@@ -1607,6 +1612,7 @@ object AggregateChats : ClickableFeature(),
                     emptyList()
                 }
             }
+
             FolderType.PRESET_OFFICIALS -> {
                 runCatching {
                     val result = WeDatabaseApi.executeQuery(
@@ -1618,11 +1624,13 @@ object AggregateChats : ClickableFeature(),
                     emptyList()
                 }
             }
+
             FolderType.SQL -> {
                 runCatching {
                     val select = folder.selectFields.ifBlank { "r.username" }
                     val where = folder.whereClause.ifBlank { "1=1" }
-                    val query = "SELECT $select FROM rcontact r LEFT JOIN img_flag i ON r.username = i.username LEFT JOIN rconversation c ON r.username = c.username WHERE $where"
+                    val query =
+                        "SELECT $select FROM rcontact r LEFT JOIN img_flag i ON r.username = i.username LEFT JOIN rconversation c ON r.username = c.username WHERE $where"
                     val result = WeDatabaseApi.executeQuery(query)
                     result.mapNotNull { row ->
                         val username = row["username"]?.toString()
@@ -1810,6 +1818,7 @@ object AggregateChats : ClickableFeature(),
         const val NICKNAME = "nickname"
         const val TYPE = "type"
         const val VERIFY_FLAG = "verifyFlag"
+
         // LV-encoded contact blob; holds the group ChatRoomNotify flag that has no column.
         const val LVBUFF = "lvbuff"
 

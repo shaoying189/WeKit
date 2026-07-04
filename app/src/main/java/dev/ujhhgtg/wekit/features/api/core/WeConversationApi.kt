@@ -6,6 +6,8 @@ import dev.ujhhgtg.reflekt.utils.createInstance
 import dev.ujhhgtg.wekit.dexkit.abc.IResolveDex
 import dev.ujhhgtg.wekit.dexkit.dsl.dexClass
 import dev.ujhhgtg.wekit.dexkit.dsl.dexMethod
+import dev.ujhhgtg.wekit.features.api.core.WeConversationApi.hideConversation
+import dev.ujhhgtg.wekit.features.api.core.WeConversationApi.reloadConversations
 import dev.ujhhgtg.wekit.features.core.ApiFeature
 import dev.ujhhgtg.wekit.features.core.Feature
 import dev.ujhhgtg.wekit.utils.HostInfo
@@ -140,12 +142,11 @@ object WeConversationApi : ApiFeature(), IResolveDex {
     // permanent delete with NO confirmation dialog. Its progress callback null-checks the PBool and
     // ProgressDialog, so nulls are safe; the trailing boolean starts a tablet/split-screen
     // EmptyActivity, so we pass false. Anchored by two in-method log strings unique to s1.d.
-    private val methodDoDeleteConversation by dexMethod(allowFailure = true) {
+    private val methodDoDeleteConversation by dexMethod {
         searchPackages("com.tencent.mm.ui.conversation")
         matcher {
-            usingStrings("oplog modContact user:%s", "oplog modContact user:%s remark:%s type:%d ")
+            usingStrings("MicroMsg.ConvDelLogic", "oplog modContact user:%s")
             paramCount = 6
-            returnType(Void.TYPE)
         }
     }
 //    private var ecsGiftMsgService: Any? = null

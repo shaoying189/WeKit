@@ -63,6 +63,12 @@ class DampedDragAnimation(
 
     private val velocityTracker = VelocityTracker()
 
+    // True while the user is actively dragging the indicator itself. An external
+    // continuous driver should stop writing the value during this window so the drag
+    // gesture wins.
+    var isDragging: Boolean = false
+        private set
+
     val value: Float get() = valueAnimation.value
     val targetValue: Float get() = valueAnimation.targetValue
     val pressProgress: Float get() = pressProgressAnimation.value
@@ -73,14 +79,17 @@ class DampedDragAnimation(
     val modifier: Modifier = Modifier.pointerInput(Unit) {
         inspectDragGestures(
             onDragStart = { down ->
+                isDragging = true
                 onDragStarted(down.position)
                 press()
             },
             onDragEnd = {
+                isDragging = false
                 onDragStopped()
                 release()
             },
             onDragCancel = {
+                isDragging = false
                 onDragStopped()
                 release()
             }
@@ -123,6 +132,15 @@ class DampedDragAnimation(
         val targetValue = value.coerceIn(valueRange)
         animationScope.launch {
             launch { valueAnimation.animateTo(targetValue, valueAnimationSpec) { updateVelocity() } }
+        }
+    }
+
+    // Sets the value immediately with no spring, so an external continuous driver
+    // (e.g. a pager's fractional scroll position) can move the indicator 1:1.
+    // snapTo cancels any in-flight animateTo on the same Animatable.
+    fun snapToValue(value: Float) {
+        animationScope.launch {
+            valueAnimation.snapTo(value.coerceIn(valueRange))
         }
     }
 

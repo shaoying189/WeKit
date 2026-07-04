@@ -150,6 +150,14 @@ fun FloatingBottomBar(
     onSelected: (index: Int) -> Unit,
     backdrop: Backdrop,
     tabsCount: Int,
+    // Optional continuous position driver (e.g. a pager's fractional scroll offset,
+    // 0f..tabsCount-1). When null the indicator springs between whole tabs as before.
+    progress: (() -> Float)? = null,
+    // Gate for the continuous driver. The indicator only tracks `progress` 1:1 while this
+    // returns true (e.g. an active finger swipe). When it returns false, a change in
+    // selectedIndex springs the indicator across with the press/glass animation — so a tab
+    // *tap* still bulges and slides rather than teleporting.
+    isTracking: (() -> Boolean)? = null,
     isBlurEnabled: Boolean = true,
     colors: FloatingBottomBarColors = FloatingBottomBarDefaults.colors(),
     content: @Composable RowScope.() -> Unit
@@ -244,7 +252,24 @@ fun FloatingBottomBar(
     LaunchedEffect(selectedIndex) {
         snapshotFlow { selectedIndex() }.collectLatest { index ->
             currentIndex = index
-            dampedDragAnimation.animateToValue(index.toFloat())
+            // Spring the indicator across (press + glass bulge) whenever the selection
+            // settles on a new tab and we're NOT mid finger-swipe. While tracking, the
+            // progress effect below owns the position, so we only keep currentIndex (icon
+            // fill / semantics) in sync here and let the final snap land it exactly.
+            if (isTracking?.invoke() != true) {
+                dampedDragAnimation.animateToValue(index.toFloat())
+            }
+        }
+    }
+
+    if (progress != null) {
+        LaunchedEffect(dampedDragAnimation) {
+            snapshotFlow { progress() }.collectLatest { value ->
+                // Track 1:1 only during an active swipe, and never fight a pill drag.
+                if (isTracking?.invoke() == true && !dampedDragAnimation.isDragging) {
+                    dampedDragAnimation.snapToValue(value)
+                }
+            }
         }
     }
 
