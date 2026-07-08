@@ -3,6 +3,7 @@ package dev.ujhhgtg.wekit.features.api.agent
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.snapshots.SnapshotStateList
+import dev.ujhhgtg.wekit.agent.net.ExternalServiceId
 import dev.ujhhgtg.wekit.agent.data.WeAgentDatabase
 import dev.ujhhgtg.wekit.agent.data.WeAgentRepository
 import dev.ujhhgtg.wekit.agent.data.WeAgentSettings
@@ -87,6 +88,21 @@ object WeAgentService : dev.ujhhgtg.wekit.agent.trigger.TriggerManager.TriggerHo
     val uiMessages: SnapshotStateList<ChatRow> = mutableStateListOf()
 
     /**
+     * Scroll state of the chat list, hoisted here so it survives the overlay panel being disposed
+     * when the floating ball closes. If it lived inside the composable it would reset to the top on
+     * every reopen (and then auto-scroll to the bottom). Kept across open/close; the UI only pulls to
+     * the bottom on a genuine new row or a session switch — see [messageListSyncedSessionId].
+     */
+    val messageListState = androidx.compose.foundation.lazy.LazyListState()
+
+    /**
+     * The session whose newest message the [messageListState] has already been snapped to. Lets the
+     * chat view land at the bottom once per session (first show / session switch) without re-snapping
+     * on a plain open/close of the ball.
+     */
+    var messageListSyncedSessionId: String? = null
+
+    /**
      * The manual-approval card shown for the CURRENT (foreground) session only. Mirrors
      * [pendingApprovals] for `currentSessionId`; kept as a separate state so the UI can observe one
      * value. A background session's pending approval sits in [pendingApprovals] and only surfaces here
@@ -161,6 +177,8 @@ object WeAgentService : dev.ujhhgtg.wekit.agent.trigger.TriggerManager.TriggerHo
         var reasoning: String? = null,
         var toolName: String? = null,
         var toolStatus: ApprovalStatus? = null,
+        /** Persisted [createdAt] from [MessageEntity]; [java.time.Instant.EPOCH] for live-streaming rows. */
+        val createdAt: java.time.Instant = java.time.Instant.EPOCH,
     ) {
         enum class Role { USER, ASSISTANT, TOOL, SYSTEM_NOTE }
     }
@@ -259,6 +277,19 @@ object WeAgentService : dev.ujhhgtg.wekit.agent.trigger.TriggerManager.TriggerHo
                 withContext(Dispatchers.Main) {
                     memoryEnabled.value = WeAgentSettings.memoryEnabled()
                     sendWhileRunningMode.value = WeAgentSettings.sendWhileRunningMode()
+                }
+
+                // Observe external service keys and keep API-key-gated tool visibility in sync.
+                // Exa / Brave tools are only advertised to the model when the corresponding key
+                // is present, so they never produce a "key not configured" error mid-turn.
+                launch {
+                    WeAgentRepository.observeExternalServices().collectLatest { services ->
+                        val keys = services.associateBy { it.serviceId }
+                        BuiltinToolProvider.exaKeyPresent =
+                            !keys[ExternalServiceId.EXA]?.apiKey.isNullOrBlank()
+                        BuiltinToolProvider.braveKeyPresent =
+                            !keys[ExternalServiceId.BRAVE]?.apiKey.isNullOrBlank()
+                    }
                 }
 
                 // Start the trigger runtime (schedule + message/SQL event triggers).
@@ -393,6 +424,28 @@ object WeAgentService : dev.ujhhgtg.wekit.agent.trigger.TriggerManager.TriggerHo
         WeAgentRepository.renameSession(id, title)
     }
 
+    /**
+     * Permanently deletes all messages after [messageTimestamp] in [sessionId] (回到此处). Cancels
+     * any running turn for that session first (callers must guard against calling this while a turn
+     * is in progress; the guard lives in the UI, but we cancel defensively here too).
+     */
+    fun truncateToMessage(sessionId: String, messageTimestamp: java.time.Instant) = scope.launch {
+        runningTurns[sessionId]?.cancel()
+        WeAgentRepository.truncateToMessage(sessionId, messageTimestamp)
+        if (sessionId == currentSessionId.value) reloadMessages(sessionId)
+    }
+
+    /**
+     * Creates a branch of [sourceSessionId] from its beginning up to and including the message at
+     * [messageTimestamp], then immediately switches the foreground to the new session. The branch
+     * title is "[分支] <original title>". Session metadata (model, system prompt, workspace,
+     * favorite) is copied; token usage and triggers are not.
+     */
+    fun branchSession(sourceSessionId: String, messageTimestamp: java.time.Instant) = scope.launch {
+        val newSessionId = WeAgentRepository.branchSession(sourceSessionId, messageTimestamp)
+        switchSessionInternal(newSessionId)
+    }
+
     /** Binds (or clears, modelId=null → "默认") the current session's model. */
     fun setSessionModel(modelId: String?) = scope.launch {
         currentSessionId.value?.let { WeAgentRepository.updateSessionModel(it, modelId) }
@@ -421,11 +474,11 @@ object WeAgentService : dev.ujhhgtg.wekit.agent.trigger.TriggerManager.TriggerHo
         val rows = mutableListOf<ChatRow>()
         for (m in WeAgentRepository.getMessages(sessionId)) {
             when (m.role) {
-                MessageRole.USER -> rows += ChatRow(m.id, ChatRow.Role.USER, m.content)
+                MessageRole.USER -> rows += ChatRow(m.id, ChatRow.Role.USER, m.content, createdAt = m.createdAt)
                 MessageRole.ASSISTANT ->
                     // Restore the persisted reasoning ("思考过程") so it survives a reload, matching
                     // the live view built from ReasoningDelta events.
-                    rows += ChatRow(m.id, ChatRow.Role.ASSISTANT, m.content, reasoning = m.reasoning)
+                    rows += ChatRow(m.id, ChatRow.Role.ASSISTANT, m.content, reasoning = m.reasoning, createdAt = m.createdAt)
                 MessageRole.TOOL -> {
                     // The TOOL message id is "tool_<callId>" (assigned at write time — reliable, unlike
                     // parsing the content). Look the tool_calls row up by that callId to recover the
@@ -442,6 +495,7 @@ object WeAgentService : dev.ujhhgtg.wekit.agent.trigger.TriggerManager.TriggerHo
                         text = payload,
                         toolName = tc?.toolName,
                         toolStatus = tc?.approvalStatus,
+                        createdAt = m.createdAt,
                     )
                 }
                 MessageRole.SYSTEM -> Unit
@@ -567,6 +621,10 @@ object WeAgentService : dev.ujhhgtg.wekit.agent.trigger.TriggerManager.TriggerHo
             return
         }
         val session = WeAgentRepository.getSession(sessionId) ?: return
+        // Remove any trailing incomplete assistant turns (thinking-only rows or tool calls whose
+        // results never arrived) so the history we send to the API is always well-formed.
+        val sanitized = WeAgentRepository.sanitizeSessionHistory(sessionId)
+        if (sanitized && sessionId == currentSessionId.value) reloadMessages(sessionId)
         val priorHistory = WeAgentRepository.loadHistory(sessionId)
         val engine = buildEngine(sessionId, session.createdAt)
         // workspaceId semantics: null = "默认" (resolve to the settings default so changing it applies

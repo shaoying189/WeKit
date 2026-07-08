@@ -10,11 +10,11 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -30,12 +30,10 @@ import dev.ujhhgtg.wekit.agent.data.entity.ModelProviderType
 import dev.ujhhgtg.wekit.agent.model.ModelProviderManager
 import dev.ujhhgtg.wekit.utils.android.showToast
 import kotlinx.coroutines.launch
-import java.util.UUID
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.SmallTitle
-import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
@@ -43,6 +41,7 @@ import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.preference.WindowDropdownPreference
 import top.yukonga.miuix.kmp.window.WindowDialog
+import java.util.UUID
 
 /** Edits one provider (name/url/key) and manages its models (id + reasoning gear + custom JSON). */
 @Composable
@@ -120,7 +119,7 @@ fun ModelProviderDetailScreen(providerId: String, onBack: () -> Unit) {
                         (m.reasoningEffort?.let { " · effort=$it" } ?: "") +
                         (m.contextWindow?.let { " · ctx=$it" } ?: "") +
                         (m.maxTokens?.let { " · max=$it" } ?: "") +
-                        (if (m.supportsVision) " · 视觉" else ""),
+                            if (m.supportsVision) " · 视觉" else "",
                     onClick = { editingModel = m },
                 )
             }
@@ -199,8 +198,8 @@ fun ModelProviderDetailScreen(providerId: String, onBack: () -> Unit) {
     }
 }
 
-/** Reasoning-effort gears (§5.2). "off" means omit the field entirely. */
-private val EFFORT_GEARS = listOf("off", "minimal", "low", "medium", "high", "xhigh")
+/** Reasoning-effort gears. "off" means omit the field entirely. */
+private val EFFORT_GEARS = listOf("off", "minimal", "low", "medium", "high", "xhigh", "max")
 
 /**
  * Model-import picker: lists ids fetched from the provider's `/models` endpoint. Ids already added
@@ -272,7 +271,7 @@ private fun ModelDialog(
     var contextWindow by remember { mutableStateOf(existing.contextWindow?.toString().orEmpty()) }
     var maxTokens by remember { mutableStateOf(existing.maxTokens?.toString().orEmpty()) }
     var supportsVision by remember { mutableStateOf(existing.supportsVision) }
-    var effortIndex by remember { mutableStateOf(EFFORT_GEARS.indexOf(existing.reasoningEffort ?: "off").coerceAtLeast(0)) }
+    var effortIndex by remember { mutableIntStateOf(EFFORT_GEARS.indexOf(existing.reasoningEffort ?: "off").coerceAtLeast(0)) }
 
     WindowDialog(show = true, title = if (existing.id.isEmpty()) "添加模型" else "编辑模型", onDismissRequest = onDismiss) {
         Column {

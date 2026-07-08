@@ -53,7 +53,8 @@ object WePacketDispatcher : ApiFeature(), IResolveDex {
                     try {
                         val reqWrapper = v0Ref.invokeMethod("getReqObj", superclass = true)!!
                         val reqPbObj = reqWrapper.reflekt().getField("a", superclass = true)!!
-                        val reqBytes = reqPbObj.reflekt().invokeMethod("toByteArray", superclass = true)!! as ByteArray
+                        val reqBytes = reqPbObj.reflekt().firstMethodOrNull { name = "toByteArray"; superclass() }
+                            ?.invoke() as? ByteArray ?: return@hookBefore
 
                         // 构造唯一标识符
                         val key =

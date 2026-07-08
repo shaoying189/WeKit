@@ -39,6 +39,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -151,6 +152,11 @@ fun FloatingBottomBar(
     onSelected: (index: Int) -> Unit,
     backdrop: Backdrop,
     tabsCount: Int,
+    // Called when the already-selected tab is tapped. In blur mode the glass pill sits on
+    // top of the selected tab and swallows the tap before it reaches the tab item, so the
+    // item's own onClick never fires for a reselection; this forwards that tap instead.
+    // Defaults to routing through onSelected so callers that don't care keep old behaviour.
+    onTabReselected: (index: Int) -> Unit = onSelected,
     // Optional continuous position driver (e.g. a pager's fractional scroll offset,
     // 0f..tabsCount-1). When null the indicator springs between whole tabs as before.
     progress: (() -> Float)? = null,
@@ -200,6 +206,10 @@ fun FloatingBottomBar(
     }
 
     var currentIndex by remember(selectedIndex) { mutableIntStateOf(selectedIndex()) }
+
+    // Kept fresh so the pill's onTap (captured once in the remembered animation) always
+    // calls the latest callback.
+    val onTabReselectedState = rememberUpdatedState(onTabReselected)
 
     // Late-bound reference to the animation so canDrag can read its live value.
     class DampedDragAnimationHolder {
@@ -256,6 +266,12 @@ fun FloatingBottomBar(
                         offsetAnimation.snapTo(offsetAnimation.value + dragAmount.x)
                     }
                 }
+            },
+            // The pill only ever rests over the selected tab, so a tap on it is a tap on the
+            // current tab. Report that tab's index to the (kept-fresh) reselect callback.
+            onTap = {
+                val index = value.fastRoundToInt().fastCoerceIn(0, tabsCount - 1)
+                onTabReselectedState.value(index)
             }
         ).also { holder.instance = it }
     }

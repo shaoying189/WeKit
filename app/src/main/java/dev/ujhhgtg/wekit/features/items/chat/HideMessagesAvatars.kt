@@ -102,16 +102,16 @@ object HideMessagesAvatars : ClickableFeature(), WeChatMessageViewApi.ICreateVie
                 text = {
                     DefaultColumn {
                         ListItem(
-                            headlineContent = { Text("隐藏私聊对方头像") },
-                            supportingContent = { Text("仅在私聊中隐藏对方的用户头像") },
+                            modifier = Modifier.clickable { incoming = !incoming },
                             trailingContent = { Switch(checked = incoming, onCheckedChange = { incoming = it }) },
-                            modifier = Modifier.clickable { incoming = !incoming }
+                            supportingContent = { Text("仅在私聊中隐藏对方的用户头像") },
+                            headlineContent = { Text("隐藏私聊对方头像") },
                         )
                         ListItem(
-                            headlineContent = { Text("隐藏发送消息头像") },
-                            supportingContent = { Text("隐藏自己发出的消息的用户头像") },
+                            modifier = Modifier.clickable { outgoing = !outgoing },
                             trailingContent = { Switch(checked = outgoing, onCheckedChange = { outgoing = it }) },
-                            modifier = Modifier.clickable { outgoing = !outgoing }
+                            supportingContent = { Text("隐藏自己发出的消息的用户头像") },
+                            headlineContent = { Text("隐藏发送消息头像") },
                         )
                     }
                 },

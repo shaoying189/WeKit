@@ -35,6 +35,11 @@ class DampedDragAnimation(
     val onDragStarted: DampedDragAnimation.(position: Offset) -> Unit,
     val onDragStopped: DampedDragAnimation.() -> Unit,
     val onDrag: DampedDragAnimation.(size: IntSize, dragAmount: Offset) -> Unit,
+    // Fired when a gesture on the indicator ends without meaningfully moving (a tap on the
+    // pill rather than a drag). Because the pill always sits over the selected tab, this is
+    // how a tap on the already-selected tab is surfaced — that tap lands on the pill, not the
+    // tab item beneath it, so the item's own onClick never runs.
+    val onTap: DampedDragAnimation.() -> Unit = {},
 ) {
 
     private val valueAnimationSpec =
@@ -77,9 +82,12 @@ class DampedDragAnimation(
     val velocity: Float get() = velocityAnimation.value
 
     val modifier: Modifier = Modifier.pointerInput(Unit) {
+        val tapSlop = viewConfiguration.touchSlop
+        var accumulatedDrag = 0f
         inspectDragGestures(
             onDragStart = { down ->
                 isDragging = true
+                accumulatedDrag = 0f
                 onDragStarted(down.position)
                 press()
             },
@@ -87,6 +95,11 @@ class DampedDragAnimation(
                 isDragging = false
                 onDragStopped()
                 release()
+                // A gesture that never moved past touch slop is a tap on the pill, not a
+                // drag. Forward it so a tap on the selected tab still triggers an action.
+                if (accumulatedDrag <= tapSlop) {
+                    onTap()
+                }
             },
             onDragCancel = {
                 isDragging = false
@@ -101,6 +114,7 @@ class DampedDragAnimation(
             val wasInside = canDrag(previousPosition)
 
             if (isInside && wasInside) {
+                accumulatedDrag += abs(dragAmount.x) + abs(dragAmount.y)
                 onDrag(size, dragAmount)
             }
         }

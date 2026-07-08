@@ -57,12 +57,12 @@ object AddToAggregationFolder : ClickableFeature(), WeConversationContextMenuApi
                 title = { Text("添加对话至归拢文件夹") },
                 text = {
                     ListItem(
-                        headlineContent = { Text("添加后打开配置对话框") },
-                        supportingContent = { Text("将对话加入文件夹后, 自动打开该文件夹的编辑对话框") },
+                        modifier = Modifier.clickable { showConfigInput = !showConfigInput },
                         trailingContent = {
                             Switch(checked = showConfigInput, onCheckedChange = null)
                         },
-                        modifier = Modifier.clickable { showConfigInput = !showConfigInput }
+                        supportingContent = { Text("将对话加入文件夹后, 自动打开该文件夹的编辑对话框") },
+                        headlineContent = { Text("添加后打开配置对话框") },
                     )
                 },
                 dismissButton = { TextButton(onDismiss) { Text("取消") } },

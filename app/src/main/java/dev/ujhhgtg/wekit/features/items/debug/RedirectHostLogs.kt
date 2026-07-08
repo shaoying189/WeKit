@@ -120,36 +120,41 @@ object RedirectHostLogs : ClickableFeature() {
                                 v = !v
                                 WePrefs.putBool("${KEY_PREFIX}v", v)
                             },
+                            trailingContent = { Switch(v, null) },
                             headlineContent = { Text("Verbose") },
-                            trailingContent = { Switch(v, null) })
+                        )
                         ListItem(
                             modifier = Modifier.clickable {
                                 d = !d
                                 WePrefs.putBool("${KEY_PREFIX}d", d)
                             },
+                            trailingContent = { Switch(d, null) },
                             headlineContent = { Text("Debug") },
-                            trailingContent = { Switch(d, null) })
+                        )
                         ListItem(
                             modifier = Modifier.clickable {
                                 i = !i
                                 WePrefs.putBool("${KEY_PREFIX}i", i)
                             },
+                            trailingContent = { Switch(i, null) },
                             headlineContent = { Text("Info") },
-                            trailingContent = { Switch(i, null) })
+                        )
                         ListItem(
                             modifier = Modifier.clickable {
                                 w = !w
                                 WePrefs.putBool("${KEY_PREFIX}w", w)
                             },
+                            trailingContent = { Switch(w, null) },
                             headlineContent = { Text("Warning") },
-                            trailingContent = { Switch(w, null) })
+                        )
                         ListItem(
                             modifier = Modifier.clickable {
                                 e = !e
                                 WePrefs.putBool("${KEY_PREFIX}e", e)
                             },
+                            trailingContent = { Switch(e, null) },
                             headlineContent = { Text("Error") },
-                            trailingContent = { Switch(e, null) })
+                        )
                     }
                 },
                 confirmButton = {

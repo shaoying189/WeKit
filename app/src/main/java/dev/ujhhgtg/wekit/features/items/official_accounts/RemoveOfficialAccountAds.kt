@@ -65,7 +65,7 @@ object RemoveOfficialAccountAds : SwitchFeature(), IWePacketInterceptor {
     private const val TAG = "RemoveOfficialAccountAds"
 
     /** 抓包模式：额外 dump 抓到的广告（过滤之前）。不影响过滤本身，过滤始终执行。 */
-    private const val CAPTURE_MODE = false
+    private const val CAPTURE_MODE = true
 
     /** 诊断模式：打印每个经过管线的 uri+cgiId（不含内容）。 */
     private const val DIAG_ALL_URIS = false
@@ -93,8 +93,17 @@ object RemoveOfficialAccountAds : SwitchFeature(), IWePacketInterceptor {
         URI_FINDER_ASYNC_LOAD,
     )
 
-    /** 走 SingleAppMsgItem 类 schema（用字段 6 检测广告）的 URI。 */
-    private val itemSchemaUris = setOf(URI_BATCH_GET_MSG_LIST)
+    /**
+     * 走 SingleAppMsgItem 类 schema（用字段 6 检测广告）的 URI。
+     *
+     * [URI_BATCH_GET_MSG_LIST] 已暂时移出此集合：该 URI 同时服务于聚合/Box 页（SingleAppMsgItem schema，
+     * field6=AdInfo 可靠）和单个公众号信息流（`_requestAuthor bizUsername` 路径，schema 不同——
+     * field6 是普通内容子消息而非 AdInfo）。若把 batchgetmsglist 纳入 itemSchemaUris，
+     * [removeAdItems] 会把单个公众号页面的所有文章 item 判定为广告并删除，导致信息流加载不出来。
+     * 等拿到单个公众号 batchgetmsglist 响应的实机抓包样本、确认 ad item 的准确字段特征后再重新启用。
+     * （[neutralizeEmbeddedAdJson] 和 [stripAdCreatives] 对该 URI 仍正常生效，无需关闭整个拦截。）
+     */
+    private val itemSchemaUris = setOf<String>()
 
     /**
      * 广告控制 JSON 里需要清空的键。与 `RemoveArticleAds` 保持一致：

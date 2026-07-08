@@ -8,7 +8,7 @@ import dev.ujhhgtg.wekit.agent.tool.ToolMode
 import java.time.Instant
 
 // ---------------------------------------------------------------------------
-// Conversation domain (§10)
+// Conversation domain
 // ---------------------------------------------------------------------------
 
 @Entity(tableName = "sessions")
@@ -18,7 +18,7 @@ data class SessionEntity(
     val systemPromptId: String?,
     val workspaceId: String?,
     /**
-     * Bound model id, or null for "默认" — meaning follow [WeAgentSettings.defaultModelId] resolved
+     * Bound model id, or null for "默认" — meaning follow [dev.ujhhgtg.wekit.agent.data.WeAgentSettings.defaultModelId] resolved
      * at turn time (like [systemPromptId]/[workspaceId]). Null lets changing the global default apply
      * to existing sessions instead of snapshotting the model at creation.
      */

@@ -95,7 +95,6 @@ object RoundAvatars : ClickableFeature(), IResolveDex {
                 title = { Text("圆角头像") },
                 text = {
                     ListItem(
-                        headlineContent = { Text("圆角弧度: %.2f".format(value)) },
                         supportingContent = {
                             Slider(
                                 value = value,
@@ -103,7 +102,8 @@ object RoundAvatars : ClickableFeature(), IResolveDex {
                                 valueRange = 0.1f..0.5f,
                                 steps = 39
                             )
-                        }
+                        },
+                        headlineContent = { Text("圆角弧度: %.2f".format(value)) },
                     )
                 },
                 dismissButton = {

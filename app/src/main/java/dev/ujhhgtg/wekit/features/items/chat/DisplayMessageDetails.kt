@@ -59,12 +59,13 @@ object DisplayMessageDetails : SwitchFeature(),
                             ) {
                                 items(displayItems) { (key, value) ->
                                     ListItem(
-                                        headlineContent = { Text(key) },
-                                        supportingContent = { Text(value) },
                                         modifier = Modifier.clickable {
                                             copyToClipboard(value)
                                             showToast("已复制")
-                                        })
+                                        },
+                                        supportingContent = { Text(value) },
+                                        headlineContent = { Text(key) },
+                                    )
                                 }
                             }
                         },

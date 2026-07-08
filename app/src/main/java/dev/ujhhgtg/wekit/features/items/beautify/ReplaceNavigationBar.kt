@@ -360,6 +360,15 @@ object ReplaceNavigationBar : ClickableFeature(), IResolveDex {
                                     progress = { selectedIndex + scrollOffsetState.floatValue },
                                     isTracking = { isSwipingState.value },
                                     onSelected = { navigateToTab(it) },
+                                    // In glass mode the pill covers the selected tab and eats
+                                    // the tap before the item's onClick can run, so tapping /
+                                    // double-tapping the current tab (e.g. Home) would do
+                                    // nothing. Route that tap through the same haptic + tab
+                                    // handler the items use, restoring double-tap-to-next-unread.
+                                    onTabReselected = { index ->
+                                        view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                                        onTabClicked(index)
+                                    },
                                     // Sample WeChat's real content (native ViewPager) into the
                                     // glass. rememberLayerBackdrop would only capture Compose
                                     // pixels, of which there are none behind this overlay bar.
@@ -515,28 +524,24 @@ object ReplaceNavigationBar : ClickableFeature(), IResolveDex {
                 text = {
                     DefaultColumn {
                         ListItem(
-                            headlineContent = { Text("使用悬浮底栏") },
                             trailingContent = {
                                 Switch(
                                     useFloatingInput,
                                     { useFloatingInput = it })
-                            }
+                            },
+                            headlineContent = { Text("使用悬浮底栏") },
                         )
                         ListItem(
-                            headlineContent = { Text("启用液态玻璃效果") },
-                            supportingContent = { Text("需启用「使用悬浮底栏」") },
                             trailingContent = {
                                 Switch(
                                     useBackdropInput,
                                     { useBackdropInput = it })
-                            }
+                            },
+                            supportingContent = { Text("需启用「使用悬浮底栏」") },
+                            headlineContent = { Text("启用液态玻璃效果") },
                         )
                         if (useBackdropInput) {
                             ListItem(
-                                headlineContent = {
-                                    val r = blurRadiusInput.roundToInt()
-                                    Text(if (r <= 0) "模糊半径: 关闭 (完全透明)" else "模糊半径: $r")
-                                },
                                 supportingContent = {
                                     Slider(
                                         value = blurRadiusInput,
@@ -544,26 +549,32 @@ object ReplaceNavigationBar : ClickableFeature(), IResolveDex {
                                         valueRange = MIN_BLUR_RADIUS.toFloat()..MAX_BLUR_RADIUS.toFloat(),
                                         steps = MAX_BLUR_RADIUS - MIN_BLUR_RADIUS - 1
                                     )
-                                }
+                                },
+                                headlineContent = {
+                                    val r = blurRadiusInput.roundToInt()
+                                    Text(if (r <= 0) "模糊半径: 关闭 (完全透明)" else "模糊半径: $r")
+                                },
                             )
                         }
                         ListItem(
-                            headlineContent = { Text("隐藏标签文本") },
-                            supportingContent = { Text("需启用「使用悬浮底栏」") },
                             trailingContent = {
                                 Switch(
                                     hideLabelsInput,
                                     { hideLabelsInput = it })
-                            }
+                            },
+                            supportingContent = { Text("需启用「使用悬浮底栏」") },
+                            headlineContent = { Text("隐藏标签文本") },
                         )
                         ListItem(
-                            headlineContent = { Text("显示「发现」标签角标") },
-                            supportingContent = { Text("包含朋友圈新通知数量等") },
+                            modifier = Modifier,
+                            leadingContent = null,
                             trailingContent = {
                                 Switch(
                                     showFinderBadgeInput,
                                     { showFinderBadgeInput = it })
-                            }
+                            },
+                            supportingContent = { Text("包含朋友圈新通知数量等") },
+                            headlineContent = { Text("显示「发现」标签角标") },
                         )
                     }
                 },

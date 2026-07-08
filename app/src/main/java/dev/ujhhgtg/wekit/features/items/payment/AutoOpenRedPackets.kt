@@ -317,14 +317,12 @@ object AutoOpenRedPackets : ClickableFeature(), WeDatabaseListenerApi.IInsertLis
                 text = {
                     DefaultColumn(Modifier.verticalScroll(rememberScrollState())) {
                         ListItem(
-                            headlineContent = { Text(if (useWhitelist) "黑名单 [> 白名单 <]" else "[> 黑名单 <] 白名单") },
-                            supportingContent = { Text(if (useWhitelist) "仅对选中联系人抢红包" else "对选中联系人跳过抢红包") },
+                            modifier = Modifier.clickable { useWhitelist = !useWhitelist },
                             trailingContent = { Switch(checked = useWhitelist, onCheckedChange = { useWhitelist = it }) },
-                            modifier = Modifier.clickable { useWhitelist = !useWhitelist }
+                            supportingContent = { Text(if (useWhitelist) "仅对选中联系人抢红包" else "对选中联系人跳过抢红包") },
+                            headlineContent = { Text(if (useWhitelist) "黑名单 [> 白名单 <]" else "[> 黑名单 <] 白名单") },
                         )
                         ListItem(
-                            headlineContent = { Text(if (useWhitelist) "配置白名单" else "配置黑名单") },
-                            supportingContent = { Text("点击选择联系人") },
                             modifier = Modifier.clickable {
                                 val regularContacts = WeDatabaseApi.getFriends() + WeDatabaseApi.getGroups()
                                 val currentList = if (useWhitelist) packetWhitelist else packetBlacklist
@@ -345,26 +343,28 @@ object AutoOpenRedPackets : ClickableFeature(), WeDatabaseListenerApi.IInsertLis
                                         onDismiss()
                                     }
                                 }
-                            }
+                            },
+                            supportingContent = { Text("点击选择联系人") },
+                            headlineContent = { Text(if (useWhitelist) "配置白名单" else "配置黑名单") },
                         )
                         ListItem(
-                            headlineContent = { Text("群聊指定群成员") },
-                            supportingContent = { Text("为指定群聊按发送成员设置黑/白名单") },
                             modifier = Modifier.clickable {
-                                RedPacketGroupMemberFilter.showManagerDialog(context)
-                            }
+                                                        RedPacketGroupMemberFilter.showManagerDialog(context)
+                                                    },
+                            supportingContent = { Text("为指定群聊按发送成员设置黑/白名单") },
+                            headlineContent = { Text("群聊指定群成员") },
                         )
                         ListItem(
-                            headlineContent = { Text("抢到后通知") },
-                            supportingContent = { Text("使用 Toast 显示抢到的金额") },
+                            modifier = Modifier.clickable { notification = !notification },
                             trailingContent = { Switch(checked = notification, onCheckedChange = { notification = it }) },
-                            modifier = Modifier.clickable { notification = !notification }
+                            supportingContent = { Text("使用 Toast 显示抢到的金额") },
+                            headlineContent = { Text("抢到后通知") },
                         )
                         ListItem(
-                            headlineContent = { Text("抢自己的红包") },
-                            supportingContent = { Text("默认情况下不抢自己发出的红包") },
+                            modifier = Modifier.clickable { self = !self },
                             trailingContent = { Switch(checked = self, onCheckedChange = { self = it }) },
-                            modifier = Modifier.clickable { self = !self }
+                            supportingContent = { Text("默认情况下不抢自己发出的红包") },
+                            headlineContent = { Text("抢自己的红包") },
                         )
                         TextField(
                             value = delayInput,

@@ -111,15 +111,13 @@ object AutoRepostMoments : ClickableFeature(),
                 text = {
                     DefaultColumn(Modifier.verticalScroll(rememberScrollState())) {
                         ListItem(
-                            headlineContent = { Text(if (useWhitelist) "黑名单 [> 白名单 <]" else "[> 黑名单 <] 白名单") },
-                            supportingContent = { Text(if (useWhitelist) "仅转发选中联系人" else "对选中联系人跳过转发") },
+                            modifier = Modifier.clickable { useWhitelist = !useWhitelist },
                             trailingContent = { Switch(checked = useWhitelist, onCheckedChange = { useWhitelist = !useWhitelist }) },
-                            modifier = Modifier.clickable { useWhitelist = !useWhitelist }
+                            supportingContent = { Text(if (useWhitelist) "仅转发选中联系人" else "对选中联系人跳过转发") },
+                            headlineContent = { Text(if (useWhitelist) "黑名单 [> 白名单 <]" else "[> 黑名单 <] 白名单") },
                         )
 
                         ListItem(
-                            headlineContent = { Text(if (useWhitelist) "配置白名单" else "配置黑名单") },
-                            supportingContent = { Text("点击选择联系人") },
                             modifier = Modifier.clickable {
                                 val regularContacts = WeDatabaseApi.getFriends() + WeDatabaseApi.getGroups()
                                 val currentList = if (useWhitelist) momentsWhitelist else momentsBlacklist
@@ -140,7 +138,9 @@ object AutoRepostMoments : ClickableFeature(),
                                         onDismiss()
                                     }
                                 }
-                            }
+                            },
+                            supportingContent = { Text("点击选择联系人") },
+                            headlineContent = { Text(if (useWhitelist) "配置白名单" else "配置黑名单") },
                         )
 
                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -516,16 +516,16 @@ private fun ModeRow(
     onClick: () -> Unit
 ) {
     ListItem(
-        headlineContent = { Text(title) },
-        supportingContent = { Text(summary) },
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .fillMaxWidth(),
         leadingContent = {
             RadioButton(
                 selected = checked,
                 onClick = null
             )
         },
-        modifier = Modifier
-            .clickable(onClick = onClick)
-            .fillMaxWidth()
+        supportingContent = { Text(summary) },
+        headlineContent = { Text(title) },
     )
 }

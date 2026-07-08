@@ -171,14 +171,14 @@ object CustomSourceApp : ClickableFeature(), IResolveDex {
                         ) {
                             items(filteredApps) { sourceApp ->
                                 ListItem(
-                                    headlineContent = { Text(sourceApp.appName) },
-                                    supportingContent = { Text(sourceApp.appId) },
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clickable {
                                             onSelect(sourceApp)
                                             onDismiss()
                                         },
+                                    supportingContent = { Text(sourceApp.appId) },
+                                    headlineContent = { Text(sourceApp.appName) },
                                 )
                             }
                         }

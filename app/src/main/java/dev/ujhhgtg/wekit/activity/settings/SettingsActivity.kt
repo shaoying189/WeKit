@@ -46,6 +46,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -86,10 +87,10 @@ import dev.ujhhgtg.wekit.ui.content.FloatingBottomBarDefaults
 import dev.ujhhgtg.wekit.ui.content.FloatingBottomBarItem
 import dev.ujhhgtg.wekit.ui.content.MiuixStackNavigator
 import dev.ujhhgtg.wekit.ui.content.liquid.vibrancy
+import dev.ujhhgtg.wekit.ui.utils.CommonContextWrapper
 import dev.ujhhgtg.wekit.ui.utils.theme.ModuleTheme
 import dev.ujhhgtg.wekit.ui.utils.theme.ThemeSettings
 import dev.ujhhgtg.wekit.utils.WeLogger
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.BasicComponentDefaults
@@ -121,9 +122,13 @@ class SettingsActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        val context = CommonContextWrapper(this)
+        val resources = context.resources
+
         setContent {
             CompositionLocalProvider(
-                LocalContext provides this,
+                LocalContext provides context,
+                LocalResources provides resources,
                 LocalActivity provides this,
                 LocalComponentActivity provides this
             ) {
@@ -139,7 +144,7 @@ class SettingsActivity : ComponentActivity() {
 }
 
 // ---------------------------------------------------------------------------
-//  Feature categories (name -> icon), mirrored from the legacy MainSettingsScreen
+//  Feature categories (name -> icon)
 // ---------------------------------------------------------------------------
 
 val FEATURE_CATEGORIES = listOf(

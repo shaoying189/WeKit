@@ -1,10 +1,12 @@
 package dev.ujhhgtg.wekit.agent.data
 
+import androidx.room.AutoMigration
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import dev.ujhhgtg.wekit.agent.data.dao.ConditionalPromptDao
+import dev.ujhhgtg.wekit.agent.data.dao.ExternalServiceDao
 import dev.ujhhgtg.wekit.agent.data.dao.MessageDao
 import dev.ujhhgtg.wekit.agent.data.dao.ModelDao
 import dev.ujhhgtg.wekit.agent.data.dao.ModelProviderDao
@@ -19,6 +21,7 @@ import dev.ujhhgtg.wekit.agent.data.dao.ToolPermissionDao
 import dev.ujhhgtg.wekit.agent.data.dao.TriggerDao
 import dev.ujhhgtg.wekit.agent.data.dao.WorkspaceDao
 import dev.ujhhgtg.wekit.agent.data.entity.ConditionalPromptEntity
+import dev.ujhhgtg.wekit.agent.data.entity.ExternalServiceEntity
 import dev.ujhhgtg.wekit.agent.data.entity.MessageEntity
 import dev.ujhhgtg.wekit.agent.data.entity.ModelEntity
 import dev.ujhhgtg.wekit.agent.data.entity.ModelProviderEntity
@@ -52,9 +55,13 @@ import dev.ujhhgtg.wekit.utils.fs.createDirsSafe
         WorkspaceEntity::class,
         SettingEntity::class,
         TriggerEntity::class,
+        ExternalServiceEntity::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = true,
+    autoMigrations = [
+        AutoMigration(from = 9, to = 10), // adds external_services table
+    ],
 )
 @TypeConverters(WeAgentConverters::class)
 abstract class WeAgentDatabase : RoomDatabase() {
@@ -72,6 +79,7 @@ abstract class WeAgentDatabase : RoomDatabase() {
     abstract fun workspaceDao(): WorkspaceDao
     abstract fun settingDao(): SettingDao
     abstract fun triggerDao(): TriggerDao
+    abstract fun externalServiceDao(): ExternalServiceDao
 
     companion object {
         @Volatile

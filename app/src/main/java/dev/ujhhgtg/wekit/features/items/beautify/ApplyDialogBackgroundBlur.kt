@@ -118,7 +118,6 @@ object ApplyDialogBackgroundBlur : ClickableFeature(), IResolveDex {
                     Text("如果本对话框背景没有模糊, 说明系统 Android 版本过低 (SDK < 31) 或未在开发者选项中启用")
                     HorizontalDivider()
                     ListItem(
-                        headlineContent = { Text("模糊半径 (实时生效)") },
                         supportingContent = {
                             IntSlider(
                                 blurRadius,
@@ -134,7 +133,8 @@ object ApplyDialogBackgroundBlur : ClickableFeature(), IResolveDex {
                                 },
                                 5..30
                             )
-                        }
+                        },
+                        headlineContent = { Text("模糊半径 (实时生效)") },
                     )
                 },
                 confirmButton = { Button(onDismiss) { Text("关闭") } })

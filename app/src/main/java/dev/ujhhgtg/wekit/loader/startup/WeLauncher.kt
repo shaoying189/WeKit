@@ -38,6 +38,7 @@ object WeLauncher {
             RuntimeConfig.mmPrefs = prefs
 
             // fix up Jetpack Compose
+            // fuck you google
             Resources::class.java.getDeclaredMethod("getString", int).hookBeforeDirectly {
                 result = runCatching { invokeOriginal() }.getOrNull() ?: "null"
             }

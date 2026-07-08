@@ -42,6 +42,8 @@ annotation class AgentTool(
         const val BUILTIN_WEBVIEW = "builtin-webview"
         const val BUILTIN_TRIGGER = "builtin-trigger"
         const val BUILTIN_INFO = "builtin-info"
+        /** Network tools: HTTP requests, page fetch, and external search APIs (Exa, Brave, …). */
+        const val BUILTIN_NET = "builtin-net"
     }
 }
 

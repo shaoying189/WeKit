@@ -183,17 +183,17 @@ object ApplyGlobalBackground : ClickableFeature() {
                             valueRange = MINIMAX
                         )
                         ListItem(
-                            headlineContent = { Text("状态栏背景透明") },
-                            supportingContent = { Text("设置状态栏背景为透明") },
+                            modifier = Modifier.clickable {
+                                transparentStatusBarInput = !transparentStatusBarInput
+                            },
                             trailingContent = {
                                 Switch(
                                     checked = transparentStatusBarInput,
-                                    onCheckedChange = { transparentStatusBarInput = it }
+                                    onCheckedChange = null
                                 )
                             },
-                            modifier = Modifier.clickable {
-                                transparentStatusBarInput = !transparentStatusBarInput
-                            }
+                            supportingContent = { Text("设置状态栏背景为透明") },
+                            headlineContent = { Text("状态栏背景透明") },
                         )
                     }
                 },

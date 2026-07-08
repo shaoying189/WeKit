@@ -67,10 +67,8 @@ import dev.ujhhgtg.wekit.utils.fs.KnownPaths
 import dev.ujhhgtg.wekit.utils.invokeOriginal
 import dev.ujhhgtg.wekit.utils.reflection.BString
 import dev.ujhhgtg.wekit.utils.serialization.DefaultJson
-import dev.ujhhgtg.wekit.utils.strings.isGroupChatWxId
 import kotlinx.serialization.Serializable
 import java.lang.reflect.Proxy
-import java.nio.ByteBuffer
 import java.text.Collator
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
@@ -1088,8 +1086,7 @@ object ConversationAggregation : ClickableFeature(),
         val placeholders = members.joinToString(",") { "?" }
         val cursor = WeDatabaseApi.rawQuery(
             """
-            SELECT r.${ConversationTable.USERNAME}, r.${ConversationTable.UNREAD_COUNT},
-                   IFNULL(c.${ContactTable.TYPE}, 0) AS ctype, c.${ContactTable.LVBUFF} AS lvbuff
+            SELECT r.${ConversationTable.USERNAME}, r.${ConversationTable.UNREAD_COUNT}
             FROM ${ConversationTable.NAME} r
             LEFT JOIN ${ContactTable.NAME} c ON c.${ContactTable.USERNAME} = r.${ConversationTable.USERNAME}
             WHERE r.${ConversationTable.USERNAME} IN ($placeholders)
@@ -1101,64 +1098,15 @@ object ConversationAggregation : ClickableFeature(),
         cursor.use { c ->
             val userIdx = c.getColumnIndex(ConversationTable.USERNAME)
             val unreadIdx = c.getColumnIndex(ConversationTable.UNREAD_COUNT)
-            val typeIdx = c.getColumnIndex("ctype")
-            val lvbuffIdx = c.getColumnIndex("lvbuff")
             while (c.moveToNext()) {
                 val unread = if (unreadIdx >= 0 && !c.isNull(unreadIdx)) c.getInt(unreadIdx) else 0
                 if (unread <= 0) continue
                 val username = if (userIdx >= 0) c.getString(userIdx) ?: "" else ""
-                val type = if (typeIdx >= 0 && !c.isNull(typeIdx)) c.getInt(typeIdx) else 0
-                val lvbuff = if (lvbuffIdx >= 0 && !c.isNull(lvbuffIdx)) c.getBlob(lvbuffIdx) else null
-                if (isMemberMuted(username, type, lvbuff)) muted += unread else normal += unread
+                if (WeConversationApi.isDnd(username)) muted += unread else normal += unread
             }
         }
         return normal to muted
     }
-
-    /**
-     * Mirrors WeChat's per-conversation mute decision (w3.b / c01.e2): a chatroom is muted when
-     * its ChatRoomNotify flag (z3.T) is 0; any other contact is muted when rcontact.type has bit
-     * 512 set. The group flag is parsed from the lvbuff blob because it has no column.
-     */
-    private fun isMemberMuted(username: String, type: Int, lvbuff: ByteArray?): Boolean {
-        if (username.isGroupChatWxId) {
-            // T == 0 means muted; absent/unparseable blob defaults to notify-on (not muted).
-            return parseChatRoomNotify(lvbuff) == 0
-        }
-        return type and CONTACT_TYPE_MUTE_BIT != 0
-    }
-
-    /**
-     * Extracts the ChatRoomNotify flag (field z3.T) from an rcontact lvbuff blob. The blob is
-     * WeChat's LV format (com.tencent.mm.sdk.platformtools.e2): a 0x7B header byte, then a fixed
-     * sequence of length-value fields — int, int, str, long, int, str, str, int, int, str, str,
-     * int(T)... Strings are big-endian short-length prefixed. T is the 12th field. Returns the
-     * flag, or null when the blob is missing / malformed (caller treats null as notify-on).
-     */
-    private fun parseChatRoomNotify(lvbuff: ByteArray?): Int? {
-        if (lvbuff == null || lvbuff.size < 2 || lvbuff[0].toInt() != 0x7B) return null
-        return runCatching {
-            val buf = ByteBuffer.wrap(lvbuff).order(java.nio.ByteOrder.BIG_ENDIAN)
-            buf.position(1) // skip 0x7B header
-            fun skipStr() {
-                val len = buf.short.toInt() and 0xFFFF
-                buf.position(buf.position() + len)
-            }
-            buf.int          // H
-            buf.int          // I
-            skipStr()        // J
-            buf.long         // K
-            buf.int          // L
-            skipStr()        // M
-            skipStr()        // N
-            buf.int          // P
-            buf.int          // Q
-            skipStr()        // R
-            skipStr()        // S
-            buf.int          // T (ChatRoomNotify)
-        }.getOrNull()
-    }
-
 
     private fun isFolderSchemaReady(): Boolean {
         folderSchemaReady?.let { return it }
@@ -1873,9 +1821,6 @@ object ConversationAggregation : ClickableFeature(),
         const val NICKNAME = "nickname"
         const val TYPE = "type"
         const val VERIFY_FLAG = "verifyFlag"
-
-        // LV-encoded contact blob; holds the group ChatRoomNotify flag that has no column.
-        const val LVBUFF = "lvbuff"
 
         val REQUIRED_COLUMNS = setOf(
             USERNAME,

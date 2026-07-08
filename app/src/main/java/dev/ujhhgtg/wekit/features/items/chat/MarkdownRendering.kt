@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Typeface
 import android.graphics.text.LineBreaker
+import android.os.Build
 import android.text.Html
 import android.text.Layout
 import android.text.SpannableStringBuilder
@@ -246,7 +247,11 @@ object MarkdownRendering : ClickableFeature(), IResolveDex {
             .setAlignment(Layout.Alignment.ALIGN_NORMAL)
             .setLineSpacing(0f, 1.1f)
             .setIncludePad(true)
-            .setBreakStrategy(LineBreaker.BREAK_STRATEGY_SIMPLE)
+            .apply {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    setBreakStrategy(LineBreaker.BREAK_STRATEGY_SIMPLE)
+                }
+            }
             .setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_NONE)
             .build()
     }
@@ -299,17 +304,19 @@ object MarkdownRendering : ClickableFeature(), IResolveDex {
                                 useMarkwon = false
                                 WePrefs.putBool(KEY_USE_MARKWON, false)
                             },
-                            headlineContent = { Text("markdown-rs + Html") },
+                            trailingContent = { RadioButton(!useMarkwon, null) },
                             supportingContent = { Text("使用 Rust crate 解析并转换为 HTML, 再使用 android.text.HTML 渲染") },
-                            trailingContent = { RadioButton(!useMarkwon, null) })
+                            headlineContent = { Text("markdown-rs + Html") },
+                        )
                         ListItem(
                             modifier = Modifier.clickable {
                                 useMarkwon = true
                                 WePrefs.putBool(KEY_USE_MARKWON, true)
                             },
-                            headlineContent = { Text("Markwon") },
+                            trailingContent = { RadioButton(useMarkwon, null) },
                             supportingContent = { Text("使用 Markwon Java 库直接渲染 Markdown") },
-                            trailingContent = { RadioButton(useMarkwon, null) })
+                            headlineContent = { Text("Markwon") },
+                        )
 
                         var noTextSizing by
                         remember { mutableStateOf(WePrefs.getBoolOrFalse(KEY_NO_TEXT_SIZING)) }
@@ -324,9 +331,10 @@ object MarkdownRendering : ClickableFeature(), IResolveDex {
                                 noTextSizing = !noTextSizing
                                 WePrefs.putBool(KEY_NO_TEXT_SIZING, noTextSizing)
                             },
-                            headlineContent = { Text("禁止改变字体大小") },
+                            trailingContent = { Switch(noTextSizing, null) },
                             supportingContent = { Text("不对 Headers, Subheaders 等组件改变字体大小") },
-                            trailingContent = { Switch(noTextSizing, null) })
+                            headlineContent = { Text("禁止改变字体大小") },
+                        )
 
                         var compactHtml by
                         remember { mutableStateOf(WePrefs.getBoolOrFalse(KEY_COMPACT_HTML)) }
@@ -341,9 +349,10 @@ object MarkdownRendering : ClickableFeature(), IResolveDex {
                                 compactHtml = !compactHtml
                                 WePrefs.putBool(KEY_COMPACT_HTML, compactHtml)
                             },
-                            headlineContent = { Text("使用紧凑 HTML 渲染") },
+                            trailingContent = { Switch(compactHtml, null) },
                             supportingContent = { Text("使用一个而非两个换行来分段") },
-                            trailingContent = { Switch(compactHtml, null) })
+                            headlineContent = { Text("使用紧凑 HTML 渲染") },
+                        )
                     }
                 },
                 confirmButton = { TextButton(onDismiss) { Text("关闭") } }

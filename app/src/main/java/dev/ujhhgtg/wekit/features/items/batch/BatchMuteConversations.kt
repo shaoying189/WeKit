@@ -42,20 +42,20 @@ object BatchMuteConversations : ClickableFeature() {
                 text = {
                     DefaultColumn {
                         ListItem(
-                            headlineContent = { Text("开启免打扰") },
-                            supportingContent = { Text("选择要静音的对话") },
                             modifier = Modifier.clickable {
                                 onDismiss()
                                 pickAndApply(context, mute = true)
-                            }
+                            },
+                            supportingContent = { Text("选择要静音的对话") },
+                            headlineContent = { Text("开启免打扰") },
                         )
                         ListItem(
-                            headlineContent = { Text("关闭免打扰") },
-                            supportingContent = { Text("选择要取消静音的对话") },
                             modifier = Modifier.clickable {
                                 onDismiss()
                                 pickAndApply(context, mute = false)
-                            }
+                            },
+                            supportingContent = { Text("选择要取消静音的对话") },
+                            headlineContent = { Text("关闭免打扰") },
                         )
                     }
                 },
@@ -90,7 +90,7 @@ object BatchMuteConversations : ClickableFeature() {
         CoroutineScope(Dispatchers.IO).launch {
             showToastSuspend("正在对 ${wxIds.size} 设置免打扰...")
             wxIds.forEach { wxId ->
-                runCatching { WeConversationApi.setDoNotDisturb(wxId, mute) }
+                runCatching { WeConversationApi.setDnd(wxId, mute) }
                     .onFailure { WeLogger.e(TAG, "failed to set mute=$mute for $wxId", it) }
                 delay(100.milliseconds)
             }

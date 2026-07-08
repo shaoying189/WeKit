@@ -89,46 +89,47 @@ object HideMeTabPageItems : ClickableFeature(), IResolveDex {
                 text = {
                     DefaultColumn {
                         ListItem(
-                            headlineContent = { Text("隐藏朋友圈标签") },
+                            modifier = Modifier.clickable { hideMomentsInput = !hideMomentsInput },
                             trailingContent = {
                                 Switch(
                                     checked = hideMomentsInput,
-                                    onCheckedChange = { hideMomentsInput = it }
+                                    onCheckedChange = null
                                 )
                             },
-                            modifier = Modifier.clickable { hideMomentsInput = !hideMomentsInput },
+                            headlineContent = { Text("隐藏朋友圈标签") },
                         )
                         ListItem(
-                            headlineContent = { Text("隐藏作品标签") },
-                            supportingContent = { Text("取决于微信版本, 可能为「视频号」「视频号和公众号」「作品」") },
+                            modifier = Modifier.clickable { hideFinderInput = !hideFinderInput },
+                            leadingContent = null,
                             trailingContent = {
                                 Switch(
                                     checked = hideFinderInput,
-                                    onCheckedChange = { hideFinderInput = it }
+                                    onCheckedChange = null
                                 )
                             },
-                            modifier = Modifier.clickable { hideFinderInput = !hideFinderInput },
+                            supportingContent = { Text("取决于微信版本, 可能为「视频号」「视频号和公众号」「作品」") },
+                            headlineContent = { Text("隐藏作品标签") },
                         )
                         ListItem(
-                            headlineContent = { Text("隐藏卡包标签") },
-                            supportingContent = { Text("取决于微信版本, 可能为「卡包」「小店与卡包」") },
+                            modifier = Modifier.clickable { hideCardsInput = !hideCardsInput },
                             trailingContent = {
                                 Switch(
                                     checked = hideCardsInput,
-                                    onCheckedChange = { hideCardsInput = it }
+                                    onCheckedChange = null
                                 )
                             },
-                            modifier = Modifier.clickable { hideCardsInput = !hideCardsInput },
+                            supportingContent = { Text("取决于微信版本, 可能为「卡包」「小店与卡包」") },
+                            headlineContent = { Text("隐藏卡包标签") },
                         )
                         ListItem(
-                            headlineContent = { Text("隐藏表情标签") },
+                            modifier = Modifier.clickable { hideEmojiInput = !hideEmojiInput },
                             trailingContent = {
                                 Switch(
                                     checked = hideEmojiInput,
-                                    onCheckedChange = { hideEmojiInput = it }
+                                    onCheckedChange = null
                                 )
                             },
-                            modifier = Modifier.clickable { hideEmojiInput = !hideEmojiInput },
+                            headlineContent = { Text("隐藏表情标签") },
                         )
                     }
                 },

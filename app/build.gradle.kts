@@ -160,7 +160,6 @@ android {
     @Suppress("UnstableApiUsage")
     androidResources {
         localeFilters += setOf("zh")
-        additionalParameters += listOf("--allow-reserved-package-id", "--package-id", "0x69")
     }
 
     buildFeatures {
@@ -360,6 +359,7 @@ dependencies {
     ksp(project(":libs:common:annotation-scanner"))
 
     implementation(libs.okhttp3.okhttp)
+    implementation(libs.jsoup)
 
     implementation(libs.rhino)
 

@@ -118,14 +118,14 @@ object DisplayDetails : ClickableFeature(), IResolveDex {
                             modifier = Modifier.fillMaxWidth()
                         )
                         ListItem(
-                            headlineContent = { Text("隐藏可见范围图标") },
+                            modifier = Modifier.clickable { hideGroupIconInput = !hideGroupIconInput },
                             trailingContent = {
                                 Switch(
                                     checked = hideGroupIconInput,
-                                    onCheckedChange = { hideGroupIconInput = it }
+                                    onCheckedChange = null
                                 )
                             },
-                            modifier = Modifier.clickable { hideGroupIconInput = !hideGroupIconInput }
+                            headlineContent = { Text("隐藏可见范围图标") },
                         )
                     }
                 },

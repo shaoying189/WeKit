@@ -114,17 +114,19 @@ object NoCompressUploadedImages : ClickableFeature(), IResolveDex {
                             modifier = Modifier.clickable {
                                 selectedMode = MODE_CONVERT
                             },
-                            headlineContent = { Text("不压缩转换 (推荐)") },
+                            trailingContent = { RadioButton(mode == MODE_CONVERT, null) },
                             supportingContent = { Text("直接转换格式, 质量最高且速度快") },
-                            trailingContent = { RadioButton(mode == MODE_CONVERT, null) })
+                            headlineContent = { Text("不压缩转换 (推荐)") },
+                        )
 
                         ListItem(
                             modifier = Modifier.clickable {
                                 selectedMode = MODE_COPY
                             },
-                            headlineContent = { Text("原图覆盖") },
+                            trailingContent = { RadioButton(mode == MODE_COPY, null) },
                             supportingContent = { Text("用原图覆盖压缩后的缓存") },
-                            trailingContent = { RadioButton(mode == MODE_COPY, null) })
+                            headlineContent = { Text("原图覆盖") },
+                        )
                     }
                 },
                 dismissButton = {

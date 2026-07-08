@@ -8,6 +8,7 @@ import dev.ujhhgtg.wekit.agent.data.entity.ModelEntity
 import dev.ujhhgtg.wekit.agent.data.entity.ModelProviderEntity
 import dev.ujhhgtg.wekit.agent.data.entity.PerTurnPromptEntity
 import dev.ujhhgtg.wekit.agent.data.entity.PresetPromptEntity
+import dev.ujhhgtg.wekit.agent.data.entity.ExternalServiceEntity
 import dev.ujhhgtg.wekit.agent.data.entity.SettingEntity
 import dev.ujhhgtg.wekit.agent.data.entity.SystemPromptEntity
 import dev.ujhhgtg.wekit.agent.data.entity.WorkspaceEntity
@@ -143,4 +144,19 @@ interface SettingDao {
 
     @Upsert
     suspend fun upsert(setting: SettingEntity)
+}
+
+@Dao
+interface ExternalServiceDao {
+    @Query("SELECT * FROM external_services")
+    fun observeAll(): Flow<List<ExternalServiceEntity>>
+
+    @Query("SELECT apiKey FROM external_services WHERE serviceId = :serviceId")
+    suspend fun getApiKey(serviceId: String): String?
+
+    @Upsert
+    suspend fun upsert(service: ExternalServiceEntity)
+
+    @Query("DELETE FROM external_services WHERE serviceId = :serviceId")
+    suspend fun deleteById(serviceId: String)
 }

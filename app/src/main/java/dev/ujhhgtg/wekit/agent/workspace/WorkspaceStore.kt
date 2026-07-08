@@ -28,6 +28,9 @@ object WorkspaceStore {
 
     val memoryDir: File by lazy { File(agentRoot, "memory").apply { mkdirs() } }
 
+    /** Scratch directory for large tool-output spill files (always available, never exposed to the user). */
+    val cacheDir: File by lazy { File(agentRoot, "cache").apply { mkdirs() } }
+
     /** Result of validating a proposed workspace name. */
     sealed interface NameValidation {
         object Ok : NameValidation
@@ -85,14 +88,15 @@ object WorkspaceStore {
         runCatching { ensureMemoryIndex().length() > MEMORY_INDEX_SOFT_LIMIT_BYTES }.getOrDefault(false)
 
     /**
-     * Builds a [WorkspaceVfs] for a turn.
+     * Builds a [WorkspaceVfs] for a turn. [cacheDir] is always provided — it is the always-on
+     * scratch space for large network-tool outputs.
      * @param workspaceName the session's bound workspace name, or null when unbound.
      * @param memoryEnabled whether the `/memory/` root should be exposed.
      */
     fun buildVfs(workspaceName: String?, memoryEnabled: Boolean): WorkspaceVfs {
         val wsRoot = workspaceName?.let { workspaceDir(it) }
         val memRoot = if (memoryEnabled) memoryDir.also { ensureMemoryIndex() } else null
-        return WorkspaceVfs(wsRoot, memRoot)
+        return WorkspaceVfs(wsRoot, memRoot, cacheDir)
     }
 
     private val SEED_MEMORY_INDEX = """

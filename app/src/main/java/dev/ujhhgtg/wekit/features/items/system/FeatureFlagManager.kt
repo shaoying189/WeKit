@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.ujhhgtg.reflekt.reflekt
 import dev.ujhhgtg.reflekt.utils.createInstance
@@ -433,11 +434,11 @@ object FeatureFlagManager : ClickableFeature(), IResolveDex {
                     CopyInfoItem("复制配置键名", configKey)
 
                     ListItem(
+                        modifier = Modifier.clickable { showOverrideDialog = true },
+                        supportingContent = { Text("为该灰度测试项覆盖其当前取值") },
                         headlineContent = {
                             Text("覆盖功能取值", style = MaterialTheme.typography.bodyLarge)
                         },
-                        supportingContent = { Text("为该灰度测试项覆盖其当前取值") },
-                        modifier = Modifier.clickable { showOverrideDialog = true }
                     )
 
                     // Override value sub-dialog
@@ -459,11 +460,11 @@ object FeatureFlagManager : ClickableFeature(), IResolveDex {
     @Composable
     private fun CopyInfoItem(label: String, value: String) {
         if (value.isEmpty()) return
-        val context = androidx.compose.ui.platform.LocalContext.current
+        val context = LocalContext.current
         ListItem(
-            headlineContent = { Text(label, style = MaterialTheme.typography.bodyLarge) },
+            modifier = Modifier.clickable { copyToClipboard(context, value) },
             supportingContent = { Text(value) },
-            modifier = Modifier.clickable { copyToClipboard(context, value) }
+            headlineContent = { Text(label, style = MaterialTheme.typography.bodyLarge) },
         )
     }
 

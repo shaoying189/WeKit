@@ -397,7 +397,7 @@ object ChatToolbar : ClickableFeature(), IResolveDex {
                     LazyColumn {
                         itemsIndexed(currentOrder) { index, name ->
                             ListItem(
-                                headlineContent = { Text(name) },
+                                modifier = Modifier,
                                 leadingContent = {
                                     Icon(iconFor(name), contentDescription = null, modifier = Modifier.size(24.dp))
                                 },
@@ -433,7 +433,8 @@ object ChatToolbar : ClickableFeature(), IResolveDex {
                                             }
                                         )
                                     }
-                                }
+                                },
+                                headlineContent = { Text(name) },
                             )
                         }
                     }
@@ -475,7 +476,7 @@ object ChatToolbar : ClickableFeature(), IResolveDex {
                                         insertQuickReply(reply)
                                         onDismiss()
                                     },
-                                    headlineContent = { Text(reply) }
+                                    headlineContent = { Text(reply) },
                                 )
                             }
                         }

@@ -11,14 +11,15 @@ import dev.ujhhgtg.wekit.features.api.core.WeConversationApi.methodSetDnd
 import dev.ujhhgtg.wekit.features.api.core.WeConversationApi.methodSetNoDnd
 import dev.ujhhgtg.wekit.features.api.core.WeConversationApi.reloadConversations
 import dev.ujhhgtg.wekit.features.api.net.WePacketHelper
-import dev.ujhhgtg.wekit.features.api.net.models.protobuf.OpLog
-import dev.ujhhgtg.wekit.features.api.net.models.protobuf.OpLogRespProto
 import dev.ujhhgtg.wekit.features.core.ApiFeature
 import dev.ujhhgtg.wekit.features.core.Feature
 import dev.ujhhgtg.wekit.utils.HostInfo
 import dev.ujhhgtg.wekit.utils.WeLogger
 import dev.ujhhgtg.wekit.utils.android.runOnUiThread
+import dev.ujhhgtg.wekit.utils.strings.isGroupChatWxId
 import java.lang.reflect.Modifier
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 @Feature(name = "对话服务", categories = ["API"], description = "提供对话管理能力")
 object WeConversationApi : ApiFeature(), IResolveDex {
@@ -120,6 +121,41 @@ object WeConversationApi : ApiFeature(), IResolveDex {
     private val methodSetNoDnd by dexMethod {
         matcher {
             usingEqStrings("MicroMsg.OpenImOpLogLogic", "OpenImOpLogLogic OpenIMModContactMuteOplog username:%s switch cancel")
+        }
+    }
+
+    // ConversationStorage.M(String) / isPlacedTop — returns true when the conversation's flag
+    // has the "placed top" high bits set. Anchored by the string it logs on a null/empty talker.
+    private val methodIsPlacedTop by dexMethod(allowFailure = true) {
+        matcher {
+            declaredClass(classConversationStorage.clazz)
+            usingStrings("MicroMsg.ConversationStorage", "isPlacedTop failed")
+            paramCount = 1
+            paramTypes(String::class.java)
+            returnType(Boolean::class.javaPrimitiveType!!)
+        }
+    }
+
+    // ConversationStorage.U(String) / setPlacedTop — sets the high bits in rconversation.flag
+    // that WeChat uses to sort pinned conversations to the top.
+    private val methodSetPlacedTop by dexMethod(allowFailure = true) {
+        matcher {
+            declaredClass(classConversationStorage.clazz)
+            usingStrings("MicroMsg.ConversationStorage", "setPlacedTop conversation failed")
+            paramCount = 1
+            paramTypes(String::class.java)
+            returnType(Boolean::class.javaPrimitiveType!!)
+        }
+    }
+
+    // ConversationStorage.X(String) / unSetPlacedTop — clears the high bits, unpinning the row.
+    private val methodUnSetPlacedTop by dexMethod(allowFailure = true) {
+        matcher {
+            declaredClass(classConversationStorage.clazz)
+            usingStrings("MicroMsg.ConversationStorage", "unSetPlacedTop conversation failed")
+            paramCount = 1
+            paramTypes(String::class.java)
+            returnType(Boolean::class.javaPrimitiveType!!)
         }
     }
 
@@ -465,8 +501,6 @@ object WeConversationApi : ApiFeature(), IResolveDex {
 //        setConversationsVisibility(visible, talkers.toTypedArray())
 //    }
 
-    private lateinit var contactType: Class<*>
-
     /** ContactStorageLogic (`e2`), the class that owns the DND setters and the modContact builder. */
     private val contactStorageLogic: Class<*> by lazy { methodSetDnd.method.declaringClass }
 
@@ -483,14 +517,10 @@ object WeConversationApi : ApiFeature(), IResolveDex {
      * [WeContactApi.deleteContact] uses. The modContact proto is built by WeChat's own
      * [methodBuildModContactOplog] so its ~80 fields (BitMask/BitVal + remark) stay byte-perfect.
      */
-    fun setDoNotDisturb(convId: String, dnd: Boolean) {
-        if (!::contactType.isInitialized) {
-            contactType = methodSetDnd.method.parameterTypes[0]
-        }
-
+    fun setDnd(convId: String, dnd: Boolean) {
         // 1. Apply the mute bit locally via WeChat's own logic (also refreshes the UI + queues the
         //    native oplog; the redundant native queue is harmless since modContact is idempotent).
-        val stub = contactType.createInstance(convId)
+        val stub = methodSetDnd.method.parameterTypes[0].createInstance(convId)
         if (dnd) {
             methodSetDnd.method.invoke(null, stub, true)
         } else {
@@ -498,44 +528,132 @@ object WeConversationApi : ApiFeature(), IResolveDex {
         }
 
         // 2. Send the modContact oplog directly so the change actually reaches the server.
-        try {
-            val contact = fetchContact(convId)
-            if (contact == null) {
-                WeLogger.w(TAG, "modContact sync skipped: no contact for $convId")
-                return
-            }
-            val protoBytes = methodBuildModContactOplog.method.invoke(null, contact)
-                ?.reflekt()?.invokeMethod("toByteArray", superclass = true) as? ByteArray
-            if (protoBytes == null) {
-                WeLogger.w(TAG, "modContact sync skipped: proto build failed for $convId")
-                return
-            }
+//        try {
+//            val contact = fetchContact(convId)
+//
+//            val protoBytes = methodBuildModContactOplog.method.invoke(null, contact)
+//                ?.reflekt()?.invokeMethod("toByteArray", superclass = true) as? ByteArray
+//            if (protoBytes == null) {
+//                WeLogger.w(TAG, "modContact sync skipped: proto build failed for $convId")
+//                return
+//            }
+//
+//            WePacketHelper.sendCgiRaw(
+//                "/cgi-bin/micromsg-bin/oplog", 681, 0, 0,
+//                OpLog.encodeRequest(listOf(OpLog.operationRaw(OpLog.CMD_MOD_CONTACT, protoBytes)))
+//            ) {
+//                onSuccess { bytes ->
+//                    val ret = bytes?.let { OpLogRespProto.decode(it).ret }
+//                    WeLogger.i(TAG, "modContact sync for $convId (dnd=$dnd): ret=$ret")
+//                }
+//                onFailure { type, code, msg ->
+//                    WeLogger.w(TAG, "modContact sync for $convId failed: $type, $code, $msg")
+//                }
+//            }
+//        } catch (ex: Exception) {
+//            WeLogger.e(TAG, "exception while syncing modContact for $convId", ex)
+//        }
+    }
 
-            WePacketHelper.sendCgiRaw(
-                "/cgi-bin/micromsg-bin/oplog", 681, 0, 0,
-                OpLog.encodeRequest(listOf(OpLog.operationRaw(OpLog.CMD_MOD_CONTACT, protoBytes)))
-            ) {
-                onSuccess { bytes ->
-                    val ret = bytes?.let { OpLogRespProto.decode(it).ret }
-                    WeLogger.i(TAG, "modContact sync for $convId (dnd=$dnd): ret=$ret")
-                }
-                onFailure { type, code, msg ->
-                    WeLogger.w(TAG, "modContact sync for $convId failed: $type, $code, $msg")
-                }
-            }
+    /**
+     * Returns true when [talker]'s conversation is pinned (「置顶」) in the homepage list.
+     * Reads from WeChat's ConversationStorage cache — safe to call on the UI thread.
+     */
+    fun isPinned(talker: String): Boolean {
+        if (methodIsPlacedTop.isPlaceholder) return false
+        return try {
+            methodIsPlacedTop.method.invoke(conversationStorage, talker) as? Boolean ?: false
         } catch (ex: Exception) {
-            WeLogger.e(TAG, "exception while syncing modContact for $convId", ex)
+            WeLogger.w(TAG, "exception while checking isPlacedTop for $talker", ex)
+            false
         }
     }
 
+    /**
+     * Pin ([top] = true) or unpin ([top] = false) [talker]'s conversation.
+     * Calls WeChat's native setPlacedTop / unSetPlacedTop which writes the high bits in
+     * rconversation.flag and notifies conversation-list observers.
+     */
+    fun setPinned(talker: String, top: Boolean) {
+        val method = if (top) methodSetPlacedTop else methodUnSetPlacedTop
+        if (method.isPlaceholder) {
+            WeLogger.w(TAG, "setPlacedTop unavailable on this build for $talker")
+            return
+        }
+        try {
+            method.method.invoke(conversationStorage, talker)
+        } catch (ex: Exception) {
+            WeLogger.w(TAG, "exception while setting placedTop=$top for $talker", ex)
+        }
+    }
+
+    /**
+     * Returns true when [talker]'s conversation is muted (「消息免打扰」).
+     *
+     * Mirrors WeChat's per-conversation mute decision (w3.b / c01.e2):
+     * - **Group chats** (`@chatroom`): muted when the ChatRoomNotify flag (z3.T) in the lvbuff
+     *   blob is 0. The flag has no column and must be parsed from the LV-encoded blob.
+     * - **Everyone else**: muted when rcontact.type has bit 512 set.
+     */
+    fun isDnd(talker: String): Boolean {
+        return try {
+            val cursor = WeDatabaseApi.rawQuery(
+                "SELECT type,lvbuff FROM rcontact WHERE username=? LIMIT 1",
+                arrayOf(talker)
+            )
+            cursor.use { c ->
+                if (!c.moveToFirst()) return@use false
+                if (talker.isGroupChatWxId) {
+                    val lvbuff = if (!c.isNull(1)) c.getBlob(1) else null
+                    parseChatRoomNotify(lvbuff) == 0
+                } else {
+                    if (!c.isNull(0)) c.getInt(0) and 512 != 0 else false
+                }
+            }
+        } catch (ex: Exception) {
+            WeLogger.w(TAG, "exception while checking isDnd for $talker", ex)
+            false
+        }
+    }
+
+    /**
+     * Extracts the ChatRoomNotify flag (field z3.T) from an rcontact lvbuff blob. The blob is
+     * WeChat's LV format (com.tencent.mm.sdk.platformtools.e2): a 0x7B header byte, then a fixed
+     * sequence of length-value fields — int, int, str, long, int, str, str, int, int, str, str,
+     * int(T)... Strings are big-endian short-length prefixed. T is the 12th field. Returns the
+     * flag, or null when the blob is missing / malformed (caller treats null as notify-on).
+     */
+    fun parseChatRoomNotify(lvbuff: ByteArray?): Int? {
+        if (lvbuff == null || lvbuff.size < 2 || lvbuff[0].toInt() != 0x7B) return null
+        return runCatching {
+            val buf = ByteBuffer.wrap(lvbuff).order(ByteOrder.BIG_ENDIAN)
+            buf.position(1) // skip 0x7B header
+            fun skipStr() {
+                val len = buf.short.toInt() and 0xFFFF
+                buf.position(buf.position() + len)
+            }
+            buf.int          // H
+            buf.int          // I
+            skipStr()        // J
+            buf.long         // K
+            buf.int          // L
+            skipStr()        // M
+            skipStr()        // N
+            buf.int          // P
+            buf.int          // Q
+            skipStr()        // R
+            skipStr()        // S
+            buf.int          // T (ChatRoomNotify)
+        }.getOrNull()
+    }
+
     /** Fetch the fully-populated contact ([com.tencent.mm.storage.z3]) for [convId], or null. */
-    private fun fetchContact(convId: String): Any? {
+    private fun fetchContact(convId: String): Any {
         return contactStorageLogic.reflekt()
-            .firstMethodOrNull {
+            .firstMethod {
                 modifiers = Modifier.STATIC
                 parameters(String::class.java)
-                returnType(contactType)
-            }
-            ?.invoke(null, convId)
+                returnType(methodSetDnd.method.parameterTypes[0])
+            }.invoke(null, convId)!!
     }
 }

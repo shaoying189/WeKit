@@ -270,15 +270,15 @@ object EmojiGameControl : ClickableFeature(), IResolveDex {
                     var stealthInput by remember { mutableStateOf(stealthMode) }
 
                     ListItem(
-                        headlineContent = { Text("隐蔽模式") },
-                        supportingContent = { Text("根据设备陀螺仪状态选择发送内容") },
-                        trailingContent = {
-                            Switch(checked = stealthInput, onCheckedChange = null)
-                        },
                         modifier = Modifier.clickable {
                             stealthInput = !stealthInput
                             stealthMode = stealthInput
-                        }
+                        },
+                        trailingContent = {
+                            Switch(checked = stealthInput, onCheckedChange = null)
+                        },
+                        supportingContent = { Text("根据设备陀螺仪状态选择发送内容") },
+                        headlineContent = { Text("隐蔽模式") },
                     )
                 })
         }

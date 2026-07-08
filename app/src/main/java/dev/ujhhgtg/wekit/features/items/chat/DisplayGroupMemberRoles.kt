@@ -102,8 +102,8 @@ object DisplayGroupMemberRoles : ClickableFeature(), IResolveDex,
                     DefaultColumn(Modifier.verticalScroll(rememberScrollState())) {
                         ListItem(
                             modifier = Modifier.clickable { showMem = !showMem },
-                            headlineContent = { Text("显示「成员」标签") },
                             trailingContent = { Switch(showMem, null) },
+                            headlineContent = { Text("显示「成员」标签") },
                         )
                         TextField(
                             label = { Text("群主 | 背景色") },

@@ -180,14 +180,12 @@ object AutoAcceptTransfers : ClickableFeature(), WeDatabaseListenerApi.IInsertLi
                 text = {
                     DefaultColumn(Modifier.verticalScroll(rememberScrollState())) {
                         ListItem(
-                            headlineContent = { Text(if (useWhitelist) "黑名单 [> 白名单 <]" else "[> 黑名单 <] 白名单") },
-                            supportingContent = { Text(if (useWhitelist) "仅对选中联系人接收转账" else "对选中联系人跳过接收转账") },
+                            modifier = Modifier.clickable { useWhitelist = !useWhitelist },
                             trailingContent = { Switch(checked = useWhitelist, onCheckedChange = { useWhitelist = it }) },
-                            modifier = Modifier.clickable { useWhitelist = !useWhitelist }
+                            supportingContent = { Text(if (useWhitelist) "仅对选中联系人接收转账" else "对选中联系人跳过接收转账") },
+                            headlineContent = { Text(if (useWhitelist) "黑名单 [> 白名单 <]" else "[> 黑名单 <] 白名单") },
                         )
                         ListItem(
-                            headlineContent = { Text(if (useWhitelist) "配置白名单" else "配置黑名单") },
-                            supportingContent = { Text("点击选择联系人") },
                             modifier = Modifier.clickable {
                                 val regularContacts = WeDatabaseApi.getFriends() + WeDatabaseApi.getGroups()
                                 val currentList = if (useWhitelist) transferWhitelist else transferBlacklist
@@ -208,13 +206,16 @@ object AutoAcceptTransfers : ClickableFeature(), WeDatabaseListenerApi.IInsertLi
                                         onDismiss()
                                     }
                                 }
-                            }
+                            },
+                            supportingContent = { Text("点击选择联系人") },
+                            headlineContent = { Text(if (useWhitelist) "配置白名单" else "配置黑名单") },
                         )
                         ListItem(
-                            headlineContent = { Text("接收后通知") },
-                            supportingContent = { Text("使用 Toast 显示收到的金额") },
+                            modifier = Modifier.clickable { notification = !notification },
+                            leadingContent = null,
                             trailingContent = { Switch(checked = notification, onCheckedChange = { notification = it }) },
-                            modifier = Modifier.clickable { notification = !notification }
+                            supportingContent = { Text("使用 Toast 显示收到的金额") },
+                            headlineContent = { Text("接收后通知") },
                         )
                         TextField(
                             value = delayInput,

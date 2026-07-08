@@ -356,13 +356,6 @@ object WeChatMessageContextMenuApi : ApiFeature(), IResolveDex {
                     ) {
                         items(items) { item ->
                             ListItem(
-                                leadingContent = {
-                                    Icon(
-                                        imageVector = item.imageVector,
-                                        contentDescription = item.text
-                                    )
-                                },
-                                headlineContent = { Text(item.text) },
                                 modifier = Modifier.clickable {
                                     onDismiss()
                                     try {
@@ -374,7 +367,14 @@ object WeChatMessageContextMenuApi : ApiFeature(), IResolveDex {
                                             ex
                                         )
                                     }
-                                }
+                                },
+                                leadingContent = {
+                                    Icon(
+                                        imageVector = item.imageVector,
+                                        contentDescription = item.text
+                                    )
+                                },
+                                headlineContent = { Text(item.text) },
                             )
                         }
                     }
@@ -471,10 +471,6 @@ object WeChatMessageContextMenuApi : ApiFeature(), IResolveDex {
     @Composable
     private fun MultiSelectMenuRow(row: MultiSelectRow, onDismiss: () -> Unit) {
         ListItem(
-            leadingContent = {
-                Icon(imageVector = row.imageVector, contentDescription = row.text)
-            },
-            headlineContent = { Text(row.text) },
             modifier = Modifier.clickable {
                 onDismiss()
                 try {
@@ -482,7 +478,11 @@ object WeChatMessageContextMenuApi : ApiFeature(), IResolveDex {
                 } catch (ex: Throwable) {
                     WeLogger.e(TAG, "exception occurred while handling multi-select click", ex)
                 }
-            }
+            },
+            leadingContent = {
+                Icon(imageVector = row.imageVector, contentDescription = row.text)
+            },
+            headlineContent = { Text(row.text) },
         )
     }
 

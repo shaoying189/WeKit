@@ -1,5 +1,9 @@
 package dev.ujhhgtg.wekit.agent.tool
 
+import dev.ujhhgtg.wekit.agent.tool.BuiltinToolProvider.Companion.AVAILABILITY_CHECKS
+import dev.ujhhgtg.wekit.agent.tool.BuiltinToolProvider.Companion.FS_TOOL_NAMES
+import dev.ujhhgtg.wekit.agent.tool.BuiltinToolProvider.Companion.exaKeyPresent
+import dev.ujhhgtg.wekit.agent.tool.BuiltinToolProvider.Companion.fsToolsVisible
 import dev.ujhhgtg.wekit.features.core.AgentTool
 import kotlinx.serialization.json.JsonObject
 
@@ -35,15 +39,21 @@ class BuiltinToolProvider(
             .filter { fsToolsVisible || it.name !in FS_TOOL_NAMES }
             .filter { visionToolsVisible || it.name !in VISION_TOOL_NAMES }
             .map { d ->
+                // If an availability check fires, append its notice to the description so the
+                // model can see the constraint before it decides to call the tool.
+                val notice = AVAILABILITY_CHECKS[d.name]?.invoke()
                 ProviderTool(
                     name = d.name,
-                    description = d.description,
+                    description = if (notice != null) "${d.description}\n\n⚠ $notice" else d.description,
                     jsonSchema = d.buildJsonSchema(),
                     factoryDefaultMode = ToolMode.defaultFor(d.sideEffect),
                 )
             }
 
     override suspend fun execute(toolName: String, arguments: JsonObject): String {
+        // Intercept calls to currently-unavailable tools before reaching the invoker,
+        // so the model gets the same actionable notice it saw in the description.
+        AVAILABILITY_CHECKS[toolName]?.invoke()?.let { return it }
         val descriptor = byName[toolName] ?: return "Unknown builtin tool: $toolName"
         return try {
             descriptor.invoker(AgentToolArgs(arguments))
@@ -65,6 +75,7 @@ class BuiltinToolProvider(
         const val WEBVIEW_ID = AgentTool.BUILTIN_WEBVIEW
         const val TRIGGER_ID = AgentTool.BUILTIN_TRIGGER
         const val INFO_ID = AgentTool.BUILTIN_INFO
+        const val NET_ID = AgentTool.BUILTIN_NET
 
         private val DISPLAY_NAMES = mapOf(
             WECHAT_ID to "微信操作",
@@ -75,6 +86,7 @@ class BuiltinToolProvider(
             WEBVIEW_ID to "WebView",
             TRIGGER_ID to "触发器",
             INFO_ID to "环境信息",
+            NET_ID to "网络",
         )
 
         /**
@@ -102,6 +114,45 @@ class BuiltinToolProvider(
 
         /** Screenshot tool name — hidden unless the session model supports vision. */
         val VISION_TOOL_NAMES = setOf("ui-screenshot")
+
+        /**
+         * Whether an Exa Search API key is configured. Refreshed by WeAgentService whenever the
+         * external_services table changes. When false the tool is still visible but its description
+         * carries an unavailability notice (see [AVAILABILITY_CHECKS]).
+         */
+        @Volatile
+        var exaKeyPresent: Boolean = false
+
+        /**
+         * Whether a Brave Search API key is configured. Same semantics as [exaKeyPresent].
+         */
+        @Volatile
+        var braveKeyPresent: Boolean = false
+
+        /**
+         * Per-tool availability checks. Each entry maps a tool name to a lambda that returns:
+         *  - `null`   — the tool is fully available; description and execution are unaffected.
+         *  - a string — the tool is currently unavailable; the string is appended to the tool
+         *               description in [listTools] (so the model discovers the constraint before
+         *               calling) **and** returned directly from [execute] if the model calls it
+         *               anyway (so it always gets an actionable error, not a cryptic API failure).
+         *
+         * Extend this map to add new conditional tools (missing permissions, disabled features, …).
+         */
+        private val AVAILABILITY_CHECKS: Map<String, () -> String?> = mapOf(
+            "exa-search" to {
+                if (!exaKeyPresent)
+                    "此工具当前不可用：用户未配置 Exa Search API Key。" +
+                    "请告知用户前往 WeAgent 设置 → 外部服务 中添加 Exa API Key，或请改用其他搜索工具。"
+                else null
+            },
+            "brave-search" to {
+                if (!braveKeyPresent)
+                    "此工具当前不可用：用户未配置 Brave Search API Key。" +
+                    "请告知用户前往 WeAgent 设置 → 外部服务 中添加 Brave Search API Key，或请改用其他搜索工具。"
+                else null
+            },
+        )
 
         /** All built-in providers, one per `@AgentTool` group present in the generated registry. */
         val all: List<BuiltinToolProvider> by lazy {

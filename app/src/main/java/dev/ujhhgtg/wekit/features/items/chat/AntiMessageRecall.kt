@@ -112,12 +112,12 @@ object AntiMessageRecall : ClickableFeature(), WeXmlParserApi.IAfterParseListene
                 text = {
                     DefaultColumn {
                         ListItem(
-                            headlineContent = { Text("防撤回自己的消息") },
-                            supportingContent = { Text("是否对自己发出的消息也生效 (这个功能现在是坏的, 别用)") },
+                            modifier = Modifier.clickable { recallOutgoingInput = !recallOutgoingInput },
                             trailingContent = {
                                 Switch(checked = recallOutgoingInput, onCheckedChange = null)
                             },
-                            modifier = Modifier.clickable { recallOutgoingInput = !recallOutgoingInput }
+                            supportingContent = { Text("是否对自己发出的消息也生效 (这个功能现在是坏的, 别用)") },
+                            headlineContent = { Text("防撤回自己的消息") },
                         )
 
                         TextField(

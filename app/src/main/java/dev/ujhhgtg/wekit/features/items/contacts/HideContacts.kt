@@ -82,7 +82,7 @@ object HideContacts : ClickableFeature(), IResolveDex, WeChatInputBarApi.IInputB
         get() = WePrefs.getStringSetOrDef(KEY_CONTACTS, emptySet())
         set(value) {
             for (convId in value) {
-                WeConversationApi.setDoNotDisturb(convId, true)
+                WeConversationApi.setDnd(convId, true)
             }
             WePrefs.putStringSet(KEY_CONTACTS, value)
         }
@@ -564,8 +564,6 @@ object HideContacts : ClickableFeature(), IResolveDex, WeChatInputBarApi.IInputB
                         var autoRejectVoipInput by remember { mutableStateOf(autoRejectVoip) }
 
                         ListItem(
-                            headlineContent = { Text("配置隐藏列表") },
-                            supportingContent = { Text("点击配置联系人隐藏列表") },
                             modifier = Modifier.clickable {
                                 showComposeDialog(context) {
                                     ContactsSelector(
@@ -579,19 +577,21 @@ object HideContacts : ClickableFeature(), IResolveDex, WeChatInputBarApi.IInputB
                                         onDismiss()
                                     }
                                 }
-                            }
+                            },
+                            supportingContent = { Text("点击配置联系人隐藏列表") },
+                            headlineContent = { Text("配置隐藏列表") },
                         )
 
                         ListItem(
-                            headlineContent = { Text("自动拒绝音视频通话") },
-                            supportingContent = { Text("不保证有效") },
-                            trailingContent = {
-                                Switch(checked = autoRejectVoipInput, onCheckedChange = null)
-                            },
                             modifier = Modifier.clickable {
                                 autoRejectVoipInput = !autoRejectVoipInput
                                 autoRejectVoip = autoRejectVoipInput
-                            }
+                            },
+                            trailingContent = {
+                                Switch(checked = autoRejectVoipInput, onCheckedChange = null)
+                            },
+                            supportingContent = { Text("不保证有效") },
+                            headlineContent = { Text("自动拒绝音视频通话") },
                         )
                     }
                 })

@@ -345,17 +345,18 @@ object MessageTimeEnhancements : ClickableFeature(),
                         )
 
                         ListItem(
-                            headlineContent = { Text("时间居中显示") },
-                            supportingContent = { Text("时间是否始终居中, 不根据发送方居左居右") },
                             modifier = Modifier.clickable {
                                 isAlwaysCenteredInput = !isAlwaysCentered
                             },
+                            leadingContent = null,
                             trailingContent = {
                                 Switch(
                                     checked = isAlwaysCenteredInput,
                                     onCheckedChange = null
                                 )
-                            }
+                            },
+                            supportingContent = { Text("时间是否始终居中, 不根据发送方居左居右") },
+                            headlineContent = { Text("时间居中显示") },
                         )
                     }
                 },

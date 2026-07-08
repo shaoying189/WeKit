@@ -95,20 +95,20 @@ object FakeLocation : ClickableFeature(), IResolveDex {
                 text = {
                     DefaultColumn {
                         ListItem(
-                            headlineContent = { Text("微信原生地图选点") },
-                            supportingContent = { Text("调用微信内置地图选择位置") },
                             modifier = Modifier.clickable {
                                 onDismiss()
                                 launchWechatLocationPicker()
-                            }
+                            },
+                            supportingContent = { Text("调用微信内置地图选择位置") },
+                            headlineContent = { Text("微信原生地图选点") },
                         )
                         ListItem(
-                            headlineContent = { Text("OSM 地图选点") },
-                            supportingContent = { Text("使用 OpenStreetMap 选择位置") },
                             modifier = Modifier.clickable {
                                 onDismiss()
                                 showOsmLocationPicker(context)
-                            }
+                            },
+                            supportingContent = { Text("使用 OpenStreetMap 选择位置") },
+                            headlineContent = { Text("OSM 地图选点") },
                         )
                     }
                 },

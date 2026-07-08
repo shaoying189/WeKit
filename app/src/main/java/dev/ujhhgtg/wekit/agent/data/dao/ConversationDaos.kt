@@ -59,6 +59,24 @@ interface MessageDao {
 
     @Query("DELETE FROM messages WHERE sessionId = :sessionId")
     suspend fun deleteForSession(sessionId: String)
+
+    /**
+     * Deletes all messages in [sessionId] whose [createdAt] is >= [fromTimestamp]. Used by
+     * [WeAgentRepository.sanitizeSessionHistory] to remove trailing incomplete assistant turns.
+     */
+    @Query("DELETE FROM messages WHERE sessionId = :sessionId AND createdAt >= :fromTimestamp")
+    suspend fun deleteFromTimestamp(sessionId: String, fromTimestamp: java.time.Instant)
+
+    /**
+     * Deletes all messages in [sessionId] whose [createdAt] is strictly after [afterTimestamp].
+     * Used by [WeAgentRepository.truncateToMessage] (回到此处).
+     */
+    @Query("DELETE FROM messages WHERE sessionId = :sessionId AND createdAt > :afterTimestamp")
+    suspend fun deleteAfterTimestamp(sessionId: String, afterTimestamp: java.time.Instant)
+
+    /** Returns all messages in [sessionId] up to and including [upToTimestamp], oldest-first. */
+    @Query("SELECT * FROM messages WHERE sessionId = :sessionId AND createdAt <= :upToTimestamp ORDER BY createdAt ASC")
+    suspend fun getUpToTimestamp(sessionId: String, upToTimestamp: java.time.Instant): List<MessageEntity>
 }
 
 @Dao
@@ -71,6 +89,22 @@ interface ToolCallDao {
 
     @Upsert
     suspend fun upsert(toolCall: ToolCallEntity)
+
+    /**
+     * Deletes all tool_call rows whose parent message belongs to [sessionId] and has a
+     * [createdAt] strictly after [afterTimestamp]. The subquery runs before the outer DELETE, so
+     * the messages rows still exist when this query fires. Used by [WeAgentRepository.truncateToMessage].
+     */
+    @Query("DELETE FROM tool_calls WHERE messageId IN (SELECT id FROM messages WHERE sessionId = :sessionId AND createdAt > :afterTimestamp)")
+    suspend fun deleteForMessagesAfter(sessionId: String, afterTimestamp: java.time.Instant)
+
+    /**
+     * Deletes all tool_call rows for a given [messageId]. Used by
+     * [WeAgentRepository.sanitizeSessionHistory] to clean up pending tool-call children of a
+     * deleted assistant message.
+     */
+    @Query("DELETE FROM tool_calls WHERE messageId = :messageId")
+    suspend fun deleteForMessage(messageId: String)
 }
 
 @Dao

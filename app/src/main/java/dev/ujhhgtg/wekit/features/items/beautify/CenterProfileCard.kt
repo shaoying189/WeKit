@@ -146,18 +146,18 @@ object CenterProfileCard : ClickableFeature(), IResolveDex {
                         )
                         ListItem(
                             modifier = Modifier.clickable { showName = !showName },
-                            headlineContent = { Text("显示昵称") },
                             trailingContent = { Switch(showName, null) },
+                            headlineContent = { Text("显示昵称") },
                         )
                         ListItem(
                             modifier = Modifier.clickable { showAlias = !showAlias },
-                            headlineContent = { Text("显示微信号") },
                             trailingContent = { Switch(showAlias, null) },
+                            headlineContent = { Text("显示微信号") },
                         )
                         ListItem(
                             modifier = Modifier.clickable { showSignature = !showSignature },
-                            headlineContent = { Text("显示签名") },
                             trailingContent = { Switch(showSignature, null) },
+                            headlineContent = { Text("显示签名") },
                         )
 
                         Text(

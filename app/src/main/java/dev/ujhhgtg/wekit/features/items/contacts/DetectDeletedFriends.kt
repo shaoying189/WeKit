@@ -267,16 +267,6 @@ object DetectDeletedFriends : ClickableFeature() {
                                         modifier = Modifier.clickable {
                                             WeApi.openContact(context, friend.contact.wxId, WeApi.OpenContactDestination.HOMEPAGE)
                                         },
-                                        headlineContent = { Text(friend.contact.displayName) },
-                                        supportingContent = {
-                                            Column {
-                                                Text("状态: ${friend.status.displayName}")
-                                                Text("昵称: ${friend.contact.nickname}")
-                                                Text("备注: ${friend.contact.remarkName}")
-                                                Text("微信 ID: ${friend.contact.wxId}")
-                                                Text("微信号: ${friend.contact.customWxId}")
-                                            }
-                                        },
                                         trailingContent = {
                                             IconButton(onClick = {
                                                 phase = DialogPhase.ConfirmDelete(
@@ -290,7 +280,18 @@ object DetectDeletedFriends : ClickableFeature() {
                                                     modifier = Modifier.size(24.dp)
                                                 )
                                             }
-                                        })
+                                        },
+                                        supportingContent = {
+                                            Column {
+                                                Text("状态: ${friend.status.displayName}")
+                                                Text("昵称: ${friend.contact.nickname}")
+                                                Text("备注: ${friend.contact.remarkName}")
+                                                Text("微信 ID: ${friend.contact.wxId}")
+                                                Text("微信号: ${friend.contact.customWxId}")
+                                            }
+                                        },
+                                        headlineContent = { Text(friend.contact.displayName) },
+                                    )
                                 }
                             }
                         }
@@ -339,8 +340,8 @@ object DetectDeletedFriends : ClickableFeature() {
                                                         modifier = Modifier.size(24.dp)
                                                     )
                                                 },
+                                                supportingContent = { Text("新建标签") },
                                                 headlineContent = { Text(selectPhase.suggestedLabelName) },
-                                                supportingContent = { Text("新建标签") }
                                             )
                                         }
                                         items(labels) { label ->
@@ -353,7 +354,7 @@ object DetectDeletedFriends : ClickableFeature() {
                                                         total = selectPhase.friends.size
                                                     )
                                                 },
-                                                headlineContent = { Text(label.labelName) }
+                                                headlineContent = { Text(label.labelName) },
                                             )
                                         }
                                     }

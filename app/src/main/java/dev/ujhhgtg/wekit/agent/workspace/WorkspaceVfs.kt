@@ -15,9 +15,10 @@ class VfsContext(val vfs: WorkspaceVfs) : AbstractCoroutineContextElement(VfsCon
 }
 
 /**
- * Virtual filesystem that the model sees as two fixed roots (§7, §8):
+ * Virtual filesystem that the model sees as three fixed roots:
  *  - `/workspace/…` → the session's bound workspace directory (null when unbound).
  *  - `/memory/…`    → the shared memory directory (null when memory is disabled).
+ *  - `/cache/…`     → always-on scratch space for large tool outputs that don't fit in context.
  *
  * Path resolution strictly clamps every access inside its root via canonical-path prefix checks, so
  * a model can never escape via `..` or absolute paths. Every operation returns a model-readable
@@ -26,18 +27,21 @@ class VfsContext(val vfs: WorkspaceVfs) : AbstractCoroutineContextElement(VfsCon
 class WorkspaceVfs(
     private val workspaceRoot: File?,
     private val memoryRoot: File?,
+    private val cacheRoot: File,
 ) {
     companion object {
         const val WORKSPACE_PREFIX = "/workspace/"
         const val MEMORY_PREFIX = "/memory/"
+        const val CACHE_PREFIX = "/cache/"
         const val MEMORY_INDEX = "MEMORY.md"
         private const val WORKSPACE_ROOT_PATH = "/workspace"
         private const val MEMORY_ROOT_PATH = "/memory"
+        private const val CACHE_ROOT_PATH = "/cache"
         private const val MAX_READ_BYTES = 256 * 1024
         private const val MAX_SEARCH_MATCHES = 200
     }
 
-    private enum class Root { WORKSPACE, MEMORY }
+    private enum class Root { WORKSPACE, MEMORY, CACHE }
 
     private class Resolved(val file: File, val root: Root) {
         val isMemoryIndex: Boolean get() = root == Root.MEMORY && file.name == MEMORY_INDEX
@@ -58,6 +62,92 @@ class WorkspaceVfs(
         if (r.file.isDirectory) return@guarded "Path is a directory, not a file: $path"
         if (r.file.length() > MAX_READ_BYTES) return@guarded "File too large (> ${MAX_READ_BYTES / 1024} KiB): $path"
         r.file.readText()
+    }
+
+    /**
+     * Read a line range from a file. Both [startLine] and [endLine] are 1-based and inclusive.
+     * Passing null for either means "from the beginning" / "to the end" respectively. Returns the
+     * selected lines joined by newlines, prefixed with a header reporting the actual line range and
+     * total line count so the model can decide whether to request more.
+     */
+    fun readFileLines(path: String, startLine: Int?, endLine: Int?): String = guarded {
+        val r = resolve(path)
+        if (!r.file.exists()) return@guarded "File not found: $path"
+        if (r.file.isDirectory) return@guarded "Path is a directory, not a file: $path"
+        val allLines = r.file.readLines()
+        val total = allLines.size
+        val from = ((startLine ?: 1) - 1).coerceIn(0, total)
+        val to = ((endLine ?: total) - 1).coerceIn(0, total - 1)
+        if (from > to) return@guarded "Empty range: startLine=$startLine endLine=$endLine (file has $total lines)"
+        val selected = allLines.subList(from, to + 1)
+        "[Lines ${from + 1}–${to + 1} of $total]\n" + selected.joinToString("\n")
+    }
+
+    /**
+     * Read one or more line ranges from a file using the compact range-spec syntax.
+     *
+     * Syntax: comma-separated segments, each of which is one of:
+     *  - `N`   — single line N (1-based)
+     *  - `N:M` — lines N through M inclusive (1-based); N or M may be empty (defaults: 1 / last line);
+     *             negative values count from EOF: -1 = last line, -2 = second-to-last, etc.
+     *
+     * Examples:
+     *  - `"1"`               → first line only
+     *  - `"1:"`, `"1:-1"`, `":-1"` → entire file
+     *  - `"1:2,5:6"`         → lines 1–2 and lines 5–6
+     *  - `"1:10,20:30,100:"` → lines 1–10, 20–30, 100 to EOF
+     *
+     * Lines from overlapping or out-of-order segments are deduplicated and returned in file order.
+     * Out-of-bounds indices are silently clamped to the file length; a reversed range (start > end
+     * after resolution) is reported as an error.
+     */
+    fun readFileRanges(path: String, lines: String): String = guarded {
+        val r = resolve(path)
+        if (!r.file.exists()) return@guarded "File not found: $path"
+        if (r.file.isDirectory) return@guarded "Path is a directory, not a file: $path"
+        val allLines = r.file.readLines()
+        val total = allLines.size
+        if (total == 0) return@guarded "(empty file)"
+
+        data class ResolvedRange(val from: Int, val to: Int) // 0-based, inclusive, already clamped
+
+        val resolved = mutableListOf<ResolvedRange>()
+        for (seg in lines.split(",").map { it.trim() }.filter { it.isNotEmpty() }) {
+            val colon = seg.indexOf(':')
+            if (colon < 0) {
+                // Single-line segment: "N"
+                val n = seg.toIntOrNull()
+                    ?: return@guarded "Invalid range spec — expected integer in segment '$seg'"
+                val idx = (if (n < 0) total + n else n - 1).coerceIn(0, total - 1)
+                resolved.add(ResolvedRange(idx, idx))
+            } else {
+                // Range segment: "N:M", "N:", ":M", ":"
+                val startStr = seg.substring(0, colon).trim()
+                val endStr   = seg.substring(colon + 1).trim()
+                val startN = if (startStr.isEmpty()) 1
+                             else startStr.toIntOrNull()
+                                  ?: return@guarded "Invalid range spec — expected integer before ':' in segment '$seg'"
+                val endN   = if (endStr.isEmpty()) -1
+                             else endStr.toIntOrNull()
+                                  ?: return@guarded "Invalid range spec — expected integer after ':' in segment '$seg'"
+                // Resolve negative indices relative to EOF before range-order check.
+                val rawFrom = if (startN < 0) total + startN else startN - 1
+                val rawTo   = if (endN   < 0) total + endN   else endN   - 1
+                if (rawFrom > rawTo) return@guarded "Reversed range in '$seg': start (line ${rawFrom + 1}) is after end (line ${rawTo + 1})"
+                resolved.add(ResolvedRange(rawFrom.coerceIn(0, total - 1), rawTo.coerceIn(0, total - 1)))
+            }
+        }
+
+        if (resolved.isEmpty()) return@guarded "No ranges parsed from spec '$lines'."
+
+        // Collect line indices in file order, deduplicating any overlaps between segments.
+        val lineIndices = sortedSetOf<Int>()
+        for (rng in resolved) { for (i in rng.from..rng.to) lineIndices.add(i) }
+
+        val header = resolved.joinToString(", ") { rng ->
+            if (rng.from == rng.to) "line ${rng.from + 1}" else "lines ${rng.from + 1}–${rng.to + 1}"
+        }
+        "[Selected: $header of $total total]\n" + lineIndices.joinToString("\n") { allLines[it] }
     }
 
     fun listDir(path: String): String = guarded {
@@ -131,6 +221,19 @@ class WorkspaceVfs(
         }
     }
 
+    /**
+     * Writes [content] to a randomly-named file in `/cache/` and returns its virtual path. Used by
+     * network tools when a response exceeds the in-context size cap: they write the full content
+     * here and return a truncation notice pointing the model to this path.
+     */
+    fun writeToCacheSpill(prefix: String, extension: String, content: String): String = guarded {
+        cacheRoot.mkdirs()
+        val name = "${prefix}_${java.util.UUID.randomUUID().toString().take(8)}.$extension"
+        val file = File(cacheRoot, name)
+        file.writeText(content)
+        "$CACHE_ROOT_PATH/$name"
+    }
+
     // -----------------------------------------------------------------------------------------
     // Internals
     // -----------------------------------------------------------------------------------------
@@ -148,8 +251,11 @@ class WorkspaceVfs(
             normalized == MEMORY_ROOT_PATH || normalized.startsWith(MEMORY_PREFIX) ->
                 Root.MEMORY to normalized.removePrefix(MEMORY_ROOT_PATH).trimStart('/')
 
+            normalized == CACHE_ROOT_PATH || normalized.startsWith(CACHE_PREFIX) ->
+                Root.CACHE to normalized.removePrefix(CACHE_ROOT_PATH).trimStart('/')
+
             else -> throw VfsException(
-                "Path must start with '$WORKSPACE_PREFIX' or '$MEMORY_PREFIX': '$virtualPath'"
+                "Path must start with '$WORKSPACE_PREFIX', '$MEMORY_PREFIX', or '$CACHE_PREFIX': '$virtualPath'"
             )
         }
 
@@ -158,6 +264,7 @@ class WorkspaceVfs(
                 ?: throw VfsException("No workspace is bound to this session; '/workspace/' is unavailable.")
             Root.MEMORY -> memoryRoot
                 ?: throw VfsException("Memory is disabled; '/memory/' is unavailable.")
+            Root.CACHE -> cacheRoot
         }
 
         val rootPath = rootDir.canonicalFile.path
@@ -169,8 +276,16 @@ class WorkspaceVfs(
     }
 
     private fun virtualOf(root: Root, file: File): String {
-        val rootDir = (if (root == Root.WORKSPACE) workspaceRoot else memoryRoot)!!.canonicalFile
-        val prefix = if (root == Root.WORKSPACE) WORKSPACE_ROOT_PATH else MEMORY_ROOT_PATH
+        val rootDir = when (root) {
+            Root.WORKSPACE -> workspaceRoot!!
+            Root.MEMORY -> memoryRoot!!
+            Root.CACHE -> cacheRoot
+        }.canonicalFile
+        val prefix = when (root) {
+            Root.WORKSPACE -> WORKSPACE_ROOT_PATH
+            Root.MEMORY -> MEMORY_ROOT_PATH
+            Root.CACHE -> CACHE_ROOT_PATH
+        }
         val rel = file.canonicalFile.path.removePrefix(rootDir.path).replace(File.separatorChar, '/')
         return (prefix + rel).ifEmpty { prefix }
     }

@@ -6,7 +6,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
@@ -96,19 +95,16 @@ object TriggerCrash : ClickableFeature() {
                     Column {
                         items.forEachIndexed { index, item ->
                             ListItem(
+                                modifier = Modifier.clickable {
+                                    onDismiss()
+                                    onSelect(index)
+                                },
                                 headlineContent = {
                                     Text(
                                         text = item,
                                         style = MaterialTheme.typography.bodyMedium
                                     )
                                 },
-                                colors = ListItemDefaults.colors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                                ),
-                                modifier = Modifier.clickable {
-                                    onDismiss()
-                                    onSelect(index)
-                                }
                             )
                             if (index < items.lastIndex) HorizontalDivider(thickness = 0.5.dp)
                         }

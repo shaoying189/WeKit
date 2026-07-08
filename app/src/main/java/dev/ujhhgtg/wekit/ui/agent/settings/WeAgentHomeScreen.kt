@@ -169,6 +169,11 @@ fun WeAgentHomeScreen(onOpen: (AgentSettingsScreen) -> Unit) {
                     summary = "全局开关与记忆索引查看",
                     onClick = { onOpen(AgentSettingsScreen.Memory) },
                 )
+                ArrowPreference(
+                    title = "外部服务",
+                    summary = "Exa Search、Brave Search 等网络工具的 API Key",
+                    onClick = { onOpen(AgentSettingsScreen.ExternalServices) },
+                )
             }
         }
 

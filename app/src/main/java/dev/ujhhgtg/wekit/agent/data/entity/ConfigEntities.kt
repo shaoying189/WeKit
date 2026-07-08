@@ -4,7 +4,7 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 
 // ---------------------------------------------------------------------------
-// Model providers & models (§10 / §5)
+// Model providers & models
 // ---------------------------------------------------------------------------
 
 enum class ModelProviderType { OPENAI_CHAT_COMPLETION, OPENAI_RESPONSES, ANTHROPIC_MESSAGES }
@@ -45,9 +45,9 @@ data class ModelEntity(
 )
 
 // ---------------------------------------------------------------------------
-// Prompts (§6). The "role/profile" concept was removed: prompts are four flat,
-// independent lists. System prompts bind per-session; per-turn & conditional
-// prompts each have a global on/off switch; presets are reusable snippets.
+// Prompts. Prompts are four flat, independent lists. System prompts bind
+// per-session; per-turn & conditional prompts each have a global on/off switch;
+// presets are reusable snippets.
 // ---------------------------------------------------------------------------
 
 /** A named system prompt. A session may bind one (SessionEntity.systemPromptId). */
@@ -85,7 +85,7 @@ data class PresetPromptEntity(
 )
 
 // ---------------------------------------------------------------------------
-// Workspaces & global settings (§10 / §7)
+// Workspaces & global settings
 // ---------------------------------------------------------------------------
 
 @Entity(tableName = "workspaces")
@@ -98,4 +98,14 @@ data class WorkspaceEntity(
 data class SettingEntity(
     @PrimaryKey val key: String,
     val value: String,
+)
+
+/**
+ * Per-service API key storage for external network integrations (Exa, Brave, etc.).
+ * Keys are stored as-is; see [dev.ujhhgtg.wekit.agent.net.ExternalServiceId] for known ids.
+ */
+@Entity(tableName = "external_services")
+data class ExternalServiceEntity(
+    @PrimaryKey val serviceId: String,
+    val apiKey: String?,
 )

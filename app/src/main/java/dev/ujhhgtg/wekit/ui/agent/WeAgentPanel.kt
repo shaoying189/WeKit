@@ -27,7 +27,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -49,6 +48,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
@@ -57,10 +57,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.composables.icons.materialsymbols.MaterialSymbols
 import com.composables.icons.materialsymbols.outlined.Add
+import com.composables.icons.materialsymbols.outlined.Call_split
 import com.composables.icons.materialsymbols.outlined.Cancel
 import com.composables.icons.materialsymbols.outlined.Close
 import com.composables.icons.materialsymbols.outlined.Copy_all
 import com.composables.icons.materialsymbols.outlined.Delete
+import com.composables.icons.materialsymbols.outlined.History
 import com.composables.icons.materialsymbols.outlined.Menu
 import com.composables.icons.materialsymbols.outlined.Menu_open
 import com.composables.icons.materialsymbols.outlined.Send
@@ -599,9 +601,35 @@ private fun SubmenuHeader(title: String, onBack: () -> Unit) {
 @Composable
 private fun MessageList(modifier: Modifier) {
     val messages = WeAgentService.uiMessages
-    val listState = rememberLazyListState()
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
+    // The list state lives in WeAgentService so it survives this panel being disposed when the ball
+    // closes; that's what keeps the scroll position put across open/close instead of resetting to the
+    // top. We only pull to the bottom on a real new row or a session switch — never on a plain reopen.
+    val listState = WeAgentService.messageListState
+    val currentSessionId by WeAgentService.currentSessionId
+    LaunchedEffect(Unit) {
+        // Track the size seen at the start of THIS composition so the first emission (which just
+        // reopening the panel produces) never scrolls — that's what preserves the position. After
+        // that, a grown size animates to the bottom, and a session switch snaps there instantly once.
+        var lastSize = -1
+        snapshotFlow { messages.size to currentSessionId }
+            .collect { (size, sessionId) ->
+                if (size == 0) {
+                    lastSize = 0
+                    return@collect
+                }
+                when {
+                    // New session (first show / switch): snap to the bottom once, no animation.
+                    WeAgentService.messageListSyncedSessionId != sessionId -> {
+                        WeAgentService.messageListSyncedSessionId = sessionId
+                        listState.scrollToItem(messages.lastIndex)
+                    }
+                    // First emission of this composition (a plain reopen): keep the saved position.
+                    lastSize == -1 -> Unit
+                    // A genuine new row arrived while visible: follow it to the bottom.
+                    size > lastSize -> listState.animateScrollToItem(messages.lastIndex)
+                }
+                lastSize = size
+            }
     }
     LazyColumn(modifier.fillMaxWidth(), state = listState, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         items(messages, key = { it.id }) { row -> MessageBubble(row) }
@@ -632,9 +660,17 @@ private fun MessageBubble(row: ChatRow) {
                     if (showTextCard) Spacer(Modifier.height(6.dp))
                 }
                 if (showTextCard) {
-                    // Long-pressing an assistant message opens a context menu to copy its raw text.
+                    // Long-pressing an assistant message opens a context menu.
                     var menuOpen by remember(row.id) { mutableStateOf(false) }
+                    // Two-step confirmation state for "回到此处": first click arms it (turns red),
+                    // second click executes. Resets whenever the menu closes.
+                    var confirmGoBack by remember(row.id) { mutableStateOf(false) }
                     val longPressable = row.role == ChatRow.Role.ASSISTANT && row.text.isNotEmpty()
+                    // A running turn blocks "回到此处" (the UI contract: truncation only when idle).
+                    val sessionRunning = WeAgentService.ballState.value.let {
+                        it == WeAgentService.BallState.RUNNING || it == WeAgentService.BallState.PENDING_APPROVAL
+                    }
+                    val sessionId = WeAgentService.currentSessionId.value
                     Box {
                         Card(
                             colors = CardDefaults.cardColors(containerColor = bg),
@@ -661,18 +697,65 @@ private fun MessageBubble(row: ChatRow) {
                             }
                         }
                         if (longPressable) {
-                            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                            DropdownMenu(
+                                expanded = menuOpen,
+                                onDismissRequest = {
+                                    menuOpen = false
+                                    confirmGoBack = false
+                                },
+                            ) {
+                                // --- 复制 ---
                                 DropdownMenuItem(
                                     text = { Text("复制") },
                                     leadingIcon = {
-                                        Icon(
-                                            imageVector = MaterialSymbols.Outlined.Copy_all,
-                                            contentDescription = "Copy"
-                                        )
+                                        Icon(MaterialSymbols.Outlined.Copy_all, contentDescription = null)
                                     },
                                     onClick = {
                                         copyToClipboard(row.text)
                                         showToast("已复制")
+                                        menuOpen = false
+                                    },
+                                )
+                                // --- 回到此处 (two-step: first click arms, second executes) ---
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            if (confirmGoBack) "确认回到此处" else "回到此处",
+                                            color = if (confirmGoBack) MaterialTheme.colorScheme.error
+                                                    else LocalContentColor.current,
+                                        )
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            MaterialSymbols.Outlined.History,
+                                            contentDescription = null,
+                                            tint = if (confirmGoBack) MaterialTheme.colorScheme.error
+                                                   else LocalContentColor.current,
+                                        )
+                                    },
+                                    enabled = !sessionRunning,
+                                    onClick = {
+                                        if (confirmGoBack) {
+                                            if (sessionId != null) {
+                                                WeAgentService.truncateToMessage(sessionId, row.createdAt)
+                                            }
+                                            menuOpen = false
+                                            confirmGoBack = false
+                                        } else {
+                                            confirmGoBack = true
+                                        }
+                                    },
+                                )
+                                // --- 创建分支 ---
+                                DropdownMenuItem(
+                                    text = { Text("创建分支") },
+                                    leadingIcon = {
+                                        Icon(MaterialSymbols.Outlined.Call_split, contentDescription = null)
+                                    },
+                                    onClick = {
+                                        if (sessionId != null) {
+                                            WeAgentService.branchSession(sessionId, row.createdAt)
+                                        }
                                         menuOpen = false
                                     },
                                 )

@@ -51,7 +51,7 @@ import java.util.Collections
 import java.util.WeakHashMap
 import kotlin.math.abs
 
-@Feature(name = "滑动消息快捷操作", categories = ["聊天"], description = "在消息上左划以引用, 右划以复读")
+@Feature(name = "滑动消息快捷操作", categories = ["聊天"], description = "在消息上滑动以引用与复读")
 object SwipeToQuoteOrRepeat : ClickableFeature(), IResolveDex,
     WeChatMessageViewApi.ICreateViewListener {
 
@@ -80,6 +80,7 @@ object SwipeToQuoteOrRepeat : ClickableFeature(), IResolveDex,
     private val overlayInterpolator = OvershootInterpolator(0.7f)
 
     private var repeatOnSwipeRight by prefOption("swipe_to_quote_or_repeat_right_repeat", false)
+    private var swapDirections by prefOption("swipe_to_quote_or_repeat_swap_directions", false)
 
     // com.tencent.mm.ui.chatting.viewitems.ChattingItemContainer (obfuscated: xg / li). This
     // RelativeLayout is the SHARED root of every message item type (each ChattingItem.F() wraps its
@@ -283,9 +284,10 @@ object SwipeToQuoteOrRepeat : ClickableFeature(), IResolveDex,
                     v.parent?.requestDisallowInterceptTouchEvent(false)
                     s.dragDirection = null
                     if (fire) {
-                        when (direction) {
-                            DragDirection.LEFT -> s.chattingContext?.let { onSwipeLeft(v, it) }
-                            DragDirection.RIGHT -> onSwipeRight(v, s)
+                        if (isRepeatDirection(direction)) {
+                            onSwipeRepeat(v, s)
+                        } else {
+                            s.chattingContext?.let { onSwipeQuote(v, it) }
                         }
                     }
                     true
@@ -359,16 +361,21 @@ object SwipeToQuoteOrRepeat : ClickableFeature(), IResolveDex,
             quoteIcon.translationX = 0f
             repeatIcon.translationX = 0f
 
+            // Which icon is active depends on the logical action bound to this physical direction,
+            // not the direction itself — so both icons move correctly when directions are swapped.
+            val (activeIcon, idleIcon) = if (isRepeatDirection(direction))
+                Pair(repeatIcon, quoteIcon) else Pair(quoteIcon, repeatIcon)
+
             if (direction == DragDirection.LEFT) {
-                quoteIcon.x = lerp(rightHiddenX, rightVisibleX, progress)
-                quoteIcon.alpha = progress
-                repeatIcon.x = leftHiddenX
-                repeatIcon.alpha = 0f
+                activeIcon.x = lerp(rightHiddenX, rightVisibleX, progress)
+                activeIcon.alpha = progress
+                idleIcon.x = leftHiddenX
+                idleIcon.alpha = 0f
             } else {
-                repeatIcon.x = lerp(leftHiddenX, leftVisibleX, progress)
-                repeatIcon.alpha = progress
-                quoteIcon.x = rightHiddenX
-                quoteIcon.alpha = 0f
+                activeIcon.x = lerp(leftHiddenX, leftVisibleX, progress)
+                activeIcon.alpha = progress
+                idleIcon.x = rightHiddenX
+                idleIcon.alpha = 0f
             }
         }
 
@@ -380,10 +387,7 @@ object SwipeToQuoteOrRepeat : ClickableFeature(), IResolveDex,
                     return
                 }
 
-                val targetIcon = when (direction) {
-                    DragDirection.LEFT -> quoteIcon
-                    DragDirection.RIGHT -> repeatIcon
-                }
+                val targetIcon = if (isRepeatDirection(direction)) repeatIcon else quoteIcon
                 val offscreenX = when (direction) {
                     DragDirection.LEFT -> root.width + edgeMargin.toFloat()
                     DragDirection.RIGHT -> -size - edgeMargin.toFloat()
@@ -462,33 +466,51 @@ object SwipeToQuoteOrRepeat : ClickableFeature(), IResolveDex,
         }
     }
 
+    // Returns whether a physical direction maps to the repeat action (vs. quote).
+    // repeat direction = LEFT when not swapped, RIGHT when swapped.
+    private fun isRepeatDirection(dir: DragDirection) = (dir == DragDirection.LEFT) xor swapDirections
+
     private fun detectDragDirection(dx: Float, dy: Float, s: SwipeState): DragDirection? {
         if (abs(dx) <= s.touchSlop || abs(dx) <= abs(dy)) return null
-        return when {
-            dx < 0 -> DragDirection.LEFT
-            repeatOnSwipeRight && s.msgInfo?.let(RepeatMessages::isSupported) == true -> DragDirection.RIGHT
-            else -> null
+        val dir = if (dx < 0) DragDirection.LEFT else DragDirection.RIGHT
+        return if (isRepeatDirection(dir)) {
+            // Repeat side: only active when the feature is enabled and the message type supports it.
+            if (repeatOnSwipeRight && s.msgInfo?.let(RepeatMessages::isSupported) == true) dir else null
+        } else {
+            dir // Quote side: always active.
         }
     }
 
     override fun onClick(context: ComponentActivity) {
         showComposeDialog(context) {
             var repeatOnRight by remember { mutableStateOf(repeatOnSwipeRight) }
+            var swap by remember { mutableStateOf(swapDirections) }
 
             AlertDialogContent(
                 title = { Text("滑动消息快捷操作") },
                 text = {
                     DefaultColumn {
                         ListItem(
-                            headlineContent = { Text("右划复读") },
-                            supportingContent = { Text("启用后, 在支持的消息上右划可直接复读") },
-                            trailingContent = {
-                                Switch(checked = repeatOnRight, onCheckedChange = null)
-                            },
                             modifier = Modifier.clickable {
                                 repeatOnRight = !repeatOnRight
                                 repeatOnSwipeRight = repeatOnRight
-                            }
+                            },
+                            trailingContent = {
+                                Switch(checked = repeatOnRight, onCheckedChange = null)
+                            },
+                            supportingContent = { Text("启用后, 在支持的消息上左划可直接复读") },
+                            headlineContent = { Text("左划复读") },
+                        )
+                        ListItem(
+                            modifier = Modifier.clickable {
+                                swap = !swap
+                                swapDirections = swap
+                            },
+                            trailingContent = {
+                                Switch(checked = swap, onCheckedChange = null)
+                            },
+                            supportingContent = { Text("启用后, 左划引用, 右划复读") },
+                            headlineContent = { Text("对调左右划") },
                         )
                     }
                 }
@@ -496,9 +518,9 @@ object SwipeToQuoteOrRepeat : ClickableFeature(), IResolveDex,
         }
     }
 
-    // ── quote on swipe ─────────────────────────────────────────────────────────
+    // ── swipe actions ──────────────────────────────────────────────────────────
 
-    private fun onSwipeLeft(originalView: View, chattingContext: Any) {
+    private fun onSwipeQuote(originalView: View, chattingContext: Any) {
         val apiMan = chattingContext.reflekt()
             .firstField { type = WeServiceApi.apiManagerClass }
             .get()!!
@@ -517,7 +539,7 @@ object SwipeToQuoteOrRepeat : ClickableFeature(), IResolveDex,
         else quoteMethod.invoke(chatFooter, msgInfo, null)
     }
 
-    private fun onSwipeRight(view: View, s: SwipeState) {
+    private fun onSwipeRepeat(view: View, s: SwipeState) {
         val msgInfo = s.msgInfo ?: return
         if (!repeatOnSwipeRight || !RepeatMessages.isSupported(msgInfo)) return
 

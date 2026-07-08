@@ -29,7 +29,7 @@ fun showComposeDialog(
     directlyDismissable: Boolean = true,
     content: @Composable ShowComposeDialogScope.() -> Unit
 ) {
-    val context = CommonContextWrapper.create(context)
+    val context = CommonContextWrapper(context)
 
     val dialog = Dialog(
         context,

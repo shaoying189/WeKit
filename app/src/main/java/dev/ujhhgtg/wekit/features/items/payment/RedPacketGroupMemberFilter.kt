@@ -196,15 +196,15 @@ object RedPacketGroupMemberFilter {
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         ListItem(
-                            headlineContent = { Text(if (useWhitelist) "黑名单 [> 白名单 <]" else "[> 黑名单 <] 白名单") },
-                            supportingContent = { Text(if (useWhitelist) "仅抢选中成员的红包" else "对选中成员跳过抢红包") },
+                            modifier = Modifier.clickable { useWhitelist = !useWhitelist },
                             trailingContent = { Switch(checked = useWhitelist, onCheckedChange = { useWhitelist = it }) },
-                            modifier = Modifier.clickable { useWhitelist = !useWhitelist }
+                            supportingContent = { Text(if (useWhitelist) "仅抢选中成员的红包" else "对选中成员跳过抢红包") },
+                            headlineContent = { Text(if (useWhitelist) "黑名单 [> 白名单 <]" else "[> 黑名单 <] 白名单") },
                         )
                         ListItem(
-                            headlineContent = { Text(if (useWhitelist) "配置白名单成员" else "配置黑名单成员") },
+                            modifier = Modifier.clickable { selectingMembers = true },
                             supportingContent = { Text("已选择 ${members.size} 个成员, 点击选择") },
-                            modifier = Modifier.clickable { selectingMembers = true }
+                            headlineContent = { Text(if (useWhitelist) "配置白名单成员" else "配置黑名单成员") },
                         )
                     }
                 },

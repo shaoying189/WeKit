@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import dev.ujhhgtg.wekit.features.api.agent.WeAgentService
+import dev.ujhhgtg.wekit.ui.agent.settings.ExternalServicesScreen
 import dev.ujhhgtg.wekit.ui.agent.settings.BuiltinProvidersScreen
 import dev.ujhhgtg.wekit.ui.agent.settings.McpServerDetailScreen
 import dev.ujhhgtg.wekit.ui.agent.settings.McpServersScreen
@@ -69,6 +70,7 @@ sealed interface AgentSettingsScreen {
     data object Memory : AgentSettingsScreen
     data object Skills : AgentSettingsScreen
     data object Triggers : AgentSettingsScreen
+    data object ExternalServices : AgentSettingsScreen
 }
 
 @Composable
@@ -117,5 +119,6 @@ private fun RenderScreen(
         AgentSettingsScreen.Memory -> MemoryScreen(onBack = pop)
         AgentSettingsScreen.Skills -> SkillsScreen(onBack = pop)
         AgentSettingsScreen.Triggers -> TriggersScreen(onBack = pop)
+        AgentSettingsScreen.ExternalServices -> ExternalServicesScreen(onBack = pop)
     }
 }
