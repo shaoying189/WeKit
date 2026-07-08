@@ -649,7 +649,7 @@ object JavaEngine {
             ) {
                 val groupId = it[0] as String
                 return@BshMethod runCatchingBsh("getGroupMemberList") {
-                    WeServiceApi.chatroomService.reflekt().firstMethod {
+                    WeServiceApi.chatroomStorage.reflekt().firstMethod {
                         parameters(BString)
                         returnType = List::class
                     }.invoke(groupId)

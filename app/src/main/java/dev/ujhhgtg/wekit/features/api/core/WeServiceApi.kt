@@ -58,6 +58,11 @@ object WeServiceApi : ApiFeature(), IResolveDex {
             usingEqStrings("MicroMsg.ChatroomService", "[isEnableRoomManager]")
         }
     }
+    private val methodChatroomStorageGetMemberCount by dexMethod {
+        matcher {
+            usingEqStrings("MicroMsg.ChatroomStorage", "[getMemberCount] init field_memberCount! username:%s count:%s")
+        }
+    }
     val classImageInfoStorage by dexClass {
         matcher {
             usingEqStrings("MicroMsg.ImgInfoStorage", "generateMd5: %s, %s")
@@ -109,34 +114,31 @@ object WeServiceApi : ApiFeature(), IResolveDex {
             usingEqStrings("save emoji thumb error")
         }
     }
-    val apiManagerClass: Class<*> by lazy { methodApiManagerGetApi.method.declaringClass }
+    val apiManagerClass: Class<*>
+        get() = methodApiManagerGetApi.method.declaringClass
 
-    val emojiFeatureService by lazy {
-        getServiceByClass(classEmojiFeatureService.clazz)
-    }
+    val emojiFeatureService
+        get() = getServiceByClass(classEmojiFeatureService.clazz)
 
-    val emojiStorageMgr by lazy {
-        classEmojiStorageMgr.reflekt().firstMethod {
+    val emojiStorageMgr
+        get() = classEmojiStorageMgr.reflekt().firstMethod {
             modifiers(Modifiers.STATIC)
             returnType = classEmojiStorageMgr.clazz
         }.invokeStatic()!!
-    }
 
-    val emojiMgr by lazy {
-        emojiFeatureService.reflekt()
+    val emojiMgr
+        get() = emojiFeatureService.reflekt()
             .firstMethod {
                 parameterCount = 0
                 returnType = classEmojiMgrImpl.clazz
             }.invoke(emojiFeatureService)!!
-    }
 
-    val emojiMgrImpl: Any by lazy {
-        emojiFeatureService.reflekt()
+    val emojiMgrImpl
+        get() = emojiFeatureService.reflekt()
             .firstMethod {
                 returnType = classEmojiMgrImpl.clazz
             }
             .invoke()!!
-    }
 
     fun processEmojiPath(path: String): String {
         return emojiMgrImpl.reflekt().firstMethod {
@@ -162,13 +164,12 @@ object WeServiceApi : ApiFeature(), IResolveDex {
             .invoke(context, path) as String
     }
 
-    val emojiInfoStorage by lazy {
-        emojiStorageMgr.reflekt()
+    val emojiInfoStorage
+        get() = emojiStorageMgr.reflekt()
             .firstMethod {
                 returnType = classEmojiInfoStorage.clazz
             }
             .invoke()!!
-    }
 
     fun getEmojiInfoByMd5(md5: String): Any {
         return emojiInfoStorage.reflekt()
@@ -179,22 +180,25 @@ object WeServiceApi : ApiFeature(), IResolveDex {
             .invoke(md5)!!
     }
 
-    val storageFeatureService by lazy {
-        getServiceByClass(classStorageFeatureService.clazz)
-    }
+    val storageFeatureService
+        get() = getServiceByClass(classStorageFeatureService.clazz)
 
-    val msgInfoStorage by lazy {
-        storageFeatureService.reflekt()
+    val msgInfoStorage
+        get() = storageFeatureService.reflekt()
             .firstMethod {
                 parameterCount = 0
                 returnType = WeMessageApi.classMsgInfoStorage.clazz
             }
             .invoke()!!
-    }
 
-    val chatroomService by lazy {
-        getServiceImplByClass(classChatroomService.clazz.interfaces[0])
-    }
+    val chatroomService
+        get() = getServiceImplByClass(classChatroomService.clazz.interfaces[0])
+
+    val chatroomStorage
+        get() =
+            chatroomService.reflekt().firstField {
+                type = methodChatroomStorageGetMemberCount.method.declaringClass
+            }.get()!!
 
     fun getServiceByClass(clazz: Class<*>): Any {
         return methodServiceManagerGetService.method.invoke(null, clazz)!!
@@ -208,13 +212,12 @@ object WeServiceApi : ApiFeature(), IResolveDex {
         return methodApiManagerGetApi.method.invoke(apiManager, clazz.interfaces[0])!!
     }
 
-    val imageInfoStorage by lazy {
-        classImageFeatureService.reflekt()
+    val imageInfoStorage
+        get() = classImageFeatureService.reflekt()
             .firstMethod {
                 modifiers(Modifiers.STATIC)
                 returnType = classImageInfoStorage.clazz
             }.invokeStatic()!!
-    }
 
     fun getImageMd5FromMsgInfo(msgInfo: MessageInfo): String {
         return imageInfoStorage.reflekt()
@@ -224,11 +227,10 @@ object WeServiceApi : ApiFeature(), IResolveDex {
             }.invoke(msgInfo.instance)!! as String
     }
 
-    val videoPathFeatureService by lazy {
-        getServiceByClass(methodVideoPathFeatureServiceRestoreMp4Path
+    val videoPathFeatureService
+        get() = getServiceByClass(methodVideoPathFeatureServiceRestoreMp4Path
                 .method.declaringClass
                 .interfaces[0])
-    }
 
     fun getVideoMp4PathFromMsgInfo(msgInfo: MessageInfo): String {
         return methodVideoPathFeatureServiceRestoreMp4Path.method.invoke(
