@@ -258,6 +258,7 @@ object MessageTimeEnhancements : ClickableFeature(),
             var timeFormatInput by remember { mutableStateOf(timeFormat) }
             var textSizeInputRaw by remember { mutableStateOf(textSize.toString()) }
             var isAlwaysCenteredInput by remember { mutableStateOf(isAlwaysCentered) }
+            var isAlwaysVisibleInput by remember { mutableStateOf(isAlwaysVisible) }
             var textColorLightInput by remember { mutableStateOf(textColorLight) }
             var textColorDarkInput by remember { mutableStateOf(textColorDark) }
             var isFocused by remember { mutableStateOf(false) }
@@ -354,9 +355,8 @@ object MessageTimeEnhancements : ClickableFeature(),
 
                         ListItem(
                             modifier = Modifier.clickable {
-                                isAlwaysCenteredInput = !isAlwaysCentered
+                                isAlwaysCenteredInput = !isAlwaysCenteredInput
                             },
-                            leadingContent = null,
                             trailingContent = {
                                 Switch(
                                     checked = isAlwaysCenteredInput,
@@ -365,6 +365,19 @@ object MessageTimeEnhancements : ClickableFeature(),
                             },
                             supportingContent = { Text("时间是否始终居中, 不根据发送方居左居右") },
                             headlineContent = { Text("时间居中显示") },
+                        )
+                        ListItem(
+                            modifier = Modifier.clickable {
+                                isAlwaysVisibleInput = !isAlwaysVisibleInput
+                            },
+                            trailingContent = {
+                                Switch(
+                                    checked = isAlwaysVisibleInput,
+                                    onCheckedChange = null
+                                )
+                            },
+                            supportingContent = { Text("是否强制显示每条消息的时间") },
+                            headlineContent = { Text("显示每条消息时间") },
                         )
                     }
                 },
@@ -379,7 +392,8 @@ object MessageTimeEnhancements : ClickableFeature(),
                         displayFormat = displayFormatInput.text
                         timeFormat = timeFormatInput
                         textSize = textSizeInput
-                        isAlwaysCentered = isAlwaysCenteredInput // 保存配置
+                        isAlwaysCentered = isAlwaysCenteredInput
+                        isAlwaysVisible = isAlwaysVisibleInput
                         textColorLight = textColorLightInput
                         textColorDark = textColorDarkInput
                         onDismiss()
