@@ -18,19 +18,6 @@ import dev.ujhhgtg.wekit.ui.utils.theme.ThemeSettings.seedColor
 import top.yukonga.miuix.kmp.theme.ThemeColorSpec
 import top.yukonga.miuix.kmp.theme.ThemePaletteStyle
 
-/**
- * Which component library the module's own UI renders with.
- * Stored in MMKV and observed via [ThemeSettings.uiEngine]; changing it re-renders live.
- */
-enum class AppUiEngine(val displayName: String) {
-    MIUIX("Miuix"),
-    MATERIAL3("Material 3");
-
-    companion object {
-        fun fromName(value: String?) = entries.find { it.name == value } ?: MIUIX
-    }
-}
-
 /** How the Settings UI decides light vs. dark. */
 enum class AppThemeMode(val displayName: String) {
     SYSTEM("跟随系统"),
@@ -106,10 +93,6 @@ enum class AppColorSpec(
  */
 object ThemeSettings {
 
-    /** Which component library the module's own UI renders with. Re-renders live on change. */
-    var uiEngine by mutableStateOf(AppUiEngine.fromName(WePrefs.getString(Preferences.UI_ENGINE)))
-        private set
-
     var themeMode by mutableStateOf(AppThemeMode.fromName(WePrefs.getString(Preferences.THEME_MODE)))
         private set
     var customColor by mutableStateOf(WePrefs.getBoolOrFalse(Preferences.THEME_CUSTOM_COLOR))
@@ -139,11 +122,6 @@ object ThemeSettings {
     /** Spec coerced to 2021 when the current palette style can't honor 2025. */
     val effectiveColorSpec: AppColorSpec
         get() = if (paletteStyle.supportsSpec2025) colorSpec else AppColorSpec.SPEC_2021
-
-    fun updateUiEngine(value: AppUiEngine) {
-        uiEngine = value
-        WePrefs.putString(Preferences.UI_ENGINE, value.name)
-    }
 
     fun updateThemeMode(value: AppThemeMode) {
         themeMode = value

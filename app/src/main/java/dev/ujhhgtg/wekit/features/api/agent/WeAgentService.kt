@@ -3,6 +3,7 @@ package dev.ujhhgtg.wekit.features.api.agent
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.snapshots.SnapshotStateList
+import dev.ujhhgtg.wekit.agent.net.ExternalServiceId
 import dev.ujhhgtg.wekit.agent.data.WeAgentDatabase
 import dev.ujhhgtg.wekit.agent.data.WeAgentRepository
 import dev.ujhhgtg.wekit.agent.data.WeAgentSettings
@@ -21,7 +22,6 @@ import dev.ujhhgtg.wekit.agent.engine.TurnConfig
 import dev.ujhhgtg.wekit.agent.mcp.McpClientManager
 import dev.ujhhgtg.wekit.agent.model.LlmToolCall
 import dev.ujhhgtg.wekit.agent.model.ModelProviderManager
-import dev.ujhhgtg.wekit.agent.net.ExternalServiceId
 import dev.ujhhgtg.wekit.agent.tool.BuiltinToolProvider
 import dev.ujhhgtg.wekit.agent.tool.ToolRegistry
 import dev.ujhhgtg.wekit.agent.ui.UiImageSink
@@ -30,12 +30,9 @@ import dev.ujhhgtg.wekit.agent.workspace.WorkspaceStore
 import dev.ujhhgtg.wekit.features.api.agent.WeAgentService.ballState
 import dev.ujhhgtg.wekit.features.api.agent.WeAgentService.handleEvent
 import dev.ujhhgtg.wekit.features.api.agent.WeAgentService.init
-import dev.ujhhgtg.wekit.features.api.agent.WeAgentService.messageListState
-import dev.ujhhgtg.wekit.features.api.agent.WeAgentService.messageListSyncedSessionId
 import dev.ujhhgtg.wekit.features.api.agent.WeAgentService.newSession
 import dev.ujhhgtg.wekit.features.api.agent.WeAgentService.pendingApproval
 import dev.ujhhgtg.wekit.features.api.agent.WeAgentService.pendingApprovals
-import dev.ujhhgtg.wekit.features.api.agent.WeAgentService.resolveTurnConfig
 import dev.ujhhgtg.wekit.features.api.agent.WeAgentService.runTurn
 import dev.ujhhgtg.wekit.features.api.agent.WeAgentService.runningTurns
 import dev.ujhhgtg.wekit.features.api.agent.WeAgentService.sendMessage
@@ -180,7 +177,7 @@ object WeAgentService : dev.ujhhgtg.wekit.agent.trigger.TriggerManager.TriggerHo
         var reasoning: String? = null,
         var toolName: String? = null,
         var toolStatus: ApprovalStatus? = null,
-        /** Persisted [createdAt] from [dev.ujhhgtg.wekit.agent.data.entity.MessageEntity]; [java.time.Instant.EPOCH] for live-streaming rows. */
+        /** Persisted [createdAt] from [MessageEntity]; [java.time.Instant.EPOCH] for live-streaming rows. */
         val createdAt: java.time.Instant = java.time.Instant.EPOCH,
     ) {
         enum class Role { USER, ASSISTANT, TOOL, SYSTEM_NOTE }

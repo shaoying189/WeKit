@@ -26,7 +26,6 @@ import dev.ujhhgtg.wekit.constants.PackageNames
 import dev.ujhhgtg.wekit.utils.HostInfo
 import dev.ujhhgtg.wekit.utils.WeLogger
 import dev.ujhhgtg.wekit.utils.android.Intent
-import dev.ujhhgtg.wekit.utils.android.ModuleRes
 import java.lang.reflect.InvocationHandler
 import java.lang.reflect.InvocationTargetException
 import java.lang.reflect.Method
@@ -324,7 +323,6 @@ object ActivityProxy {
 
         override fun callActivityOnCreate(activity: Activity, icicle: Bundle?) {
             if (ActProxyMgr.isModuleProxyActivity(activity.javaClass.name)) {
-                checkAndInjectResources(activity)
                 val cl = ParcelableFixer.hybridClassLoader
                 runCatching {
                     Activity::class.java.getDeclaredField("mClassLoader")
@@ -342,16 +340,7 @@ object ActivityProxy {
             activity: Activity,
             icicle: Bundle?,
             persistentState: PersistableBundle?
-        ) {
-            checkAndInjectResources(activity)
-            base.callActivityOnCreate(activity, icicle, persistentState)
-        }
-
-        private fun checkAndInjectResources(activity: Activity) {
-            if (ActProxyMgr.isModuleProxyActivity(activity.javaClass.name)) {
-                ModuleRes.init(activity)
-            }
-        }
+        ) = base.callActivityOnCreate(activity, icicle, persistentState)
 
         override fun onCreate(arguments: Bundle?) = base.onCreate(arguments)
         override fun start() = base.start()

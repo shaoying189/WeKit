@@ -130,14 +130,14 @@ fun McpServerDetailScreen(serverId: String, onBack: () -> Unit) {
     }
 }
 
-internal val MCP_MODE_ORDER = listOf(
+private val MCP_MODE_ORDER = listOf(
     dev.ujhhgtg.wekit.agent.tool.ToolMode.ENABLED,
     dev.ujhhgtg.wekit.agent.tool.ToolMode.MANUAL_APPROVAL,
     dev.ujhhgtg.wekit.agent.tool.ToolMode.SMART_APPROVAL,
     dev.ujhhgtg.wekit.agent.tool.ToolMode.DISABLED,
 )
 
-internal fun dev.ujhhgtg.wekit.agent.tool.ToolMode.mcpLabel(): String = when (this) {
+private fun dev.ujhhgtg.wekit.agent.tool.ToolMode.mcpLabel(): String = when (this) {
     dev.ujhhgtg.wekit.agent.tool.ToolMode.ENABLED -> "直接允许"
     dev.ujhhgtg.wekit.agent.tool.ToolMode.MANUAL_APPROVAL -> "手动审批"
     dev.ujhhgtg.wekit.agent.tool.ToolMode.SMART_APPROVAL -> "智能审批"

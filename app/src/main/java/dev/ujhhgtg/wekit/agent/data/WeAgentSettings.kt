@@ -3,7 +3,6 @@ package dev.ujhhgtg.wekit.agent.data
 import dev.ujhhgtg.wekit.agent.data.WeAgentSettings.load
 import dev.ujhhgtg.wekit.agent.data.entity.SettingEntity
 import dev.ujhhgtg.wekit.agent.tool.ToolLoadingMode
-import dev.ujhhgtg.wekit.features.api.agent.WeAgentService
 import dev.ujhhgtg.wekit.utils.WeLogger
 import java.util.concurrent.ConcurrentHashMap
 
@@ -73,9 +72,9 @@ object WeAgentSettings {
     suspend fun overlayForegroundOnly(): Boolean = get(KEY_OVERLAY_FOREGROUND_ONLY)?.toBoolean() ?: false
 
     /** Reads the send-while-running mode, defaulting to QUEUE_AFTER_TURN. */
-    suspend fun sendWhileRunningMode(): WeAgentService.SendWhileRunningMode =
+    suspend fun sendWhileRunningMode(): dev.ujhhgtg.wekit.features.api.agent.WeAgentService.SendWhileRunningMode =
         when (get(KEY_SEND_WHILE_RUNNING)) {
-            "QUEUE_AS_STEER" -> WeAgentService.SendWhileRunningMode.QUEUE_AS_STEER
-            else -> WeAgentService.SendWhileRunningMode.QUEUE_AFTER_TURN
+            "QUEUE_AS_STEER" -> dev.ujhhgtg.wekit.features.api.agent.WeAgentService.SendWhileRunningMode.QUEUE_AS_STEER
+            else -> dev.ujhhgtg.wekit.features.api.agent.WeAgentService.SendWhileRunningMode.QUEUE_AFTER_TURN
         }
 }

@@ -11,7 +11,6 @@ object Preferences {
     const val MATCH_GENERIC_WXID_EXP = "match_generic_wxid"
 
     // Settings UI theming
-    const val UI_ENGINE = "settings_ui_engine"
     const val THEME_MODE = "settings_theme_mode"
     const val THEME_CUSTOM_COLOR = "settings_theme_custom_color"
     const val THEME_DYNAMIC_WALLPAPER = "settings_theme_dynamic_wallpaper"

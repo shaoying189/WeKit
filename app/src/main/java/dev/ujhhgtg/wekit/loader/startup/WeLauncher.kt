@@ -1,6 +1,7 @@
 package dev.ujhhgtg.wekit.loader.startup
 
 import android.content.Context
+import android.content.res.Resources
 import com.tencent.mm.boot.BuildConfig
 import dev.ujhhgtg.wekit.constants.PackageNames
 import dev.ujhhgtg.wekit.constants.Preferences
@@ -12,7 +13,9 @@ import dev.ujhhgtg.wekit.utils.HostInfo
 import dev.ujhhgtg.wekit.utils.RuntimeConfig
 import dev.ujhhgtg.wekit.utils.TargetProcesses
 import dev.ujhhgtg.wekit.utils.WeLogger
-import dev.ujhhgtg.wekit.utils.android.ModuleRes
+import dev.ujhhgtg.wekit.utils.hookBeforeDirectly
+import dev.ujhhgtg.wekit.utils.invokeOriginal
+import dev.ujhhgtg.wekit.utils.reflection.int
 
 object WeLauncher {
 
@@ -33,7 +36,12 @@ object WeLauncher {
             val prefs =
                 context.getSharedPreferences("${PackageNames.WECHAT}_preferences", Context.MODE_PRIVATE)
             RuntimeConfig.mmPrefs = prefs
-            ModuleRes.init(appContext)
+
+            // fix up Jetpack Compose
+            // fuck you google
+            Resources::class.java.getDeclaredMethod("getString", int).hookBeforeDirectly {
+                result = runCatching { invokeOriginal() }.getOrNull() ?: "null"
+            }
         }
 
         runCatching {

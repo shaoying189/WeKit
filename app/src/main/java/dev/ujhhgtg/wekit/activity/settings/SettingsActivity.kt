@@ -1,7 +1,5 @@
 package dev.ujhhgtg.wekit.activity.settings
 
-import android.content.res.Resources
-import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.LocalActivity
@@ -35,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -52,11 +51,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.navigation.NavType
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
-import androidx.navigation.navArgument
 import com.composables.icons.materialsymbols.MaterialSymbols
 import com.composables.icons.materialsymbols.outlined.Account_circle
 import com.composables.icons.materialsymbols.outlined.Add_circle
@@ -84,18 +78,6 @@ import com.composables.icons.materialsymbols.outlinedfilled.Article
 import com.composables.icons.materialsymbols.outlinedfilled.Home
 import com.composables.icons.materialsymbols.outlinedfilled.Settings
 import com.composables.icons.materialsymbols.outlinedfilled.Tune
-import dev.ujhhgtg.wekit.activity.settings.material3.Material3CategoryDetailScreen
-import dev.ujhhgtg.wekit.activity.settings.material3.Material3FeaturesPager
-import dev.ujhhgtg.wekit.activity.settings.material3.Material3HomePager
-import dev.ujhhgtg.wekit.activity.settings.material3.Material3LicenseScreen
-import dev.ujhhgtg.wekit.activity.settings.material3.Material3LogsPager
-import dev.ujhhgtg.wekit.activity.settings.material3.Material3SettingsPager
-import dev.ujhhgtg.wekit.activity.settings.miuix.CategoryDetailScreen
-import dev.ujhhgtg.wekit.activity.settings.miuix.LicenseScreen
-import dev.ujhhgtg.wekit.activity.settings.miuix.MiuixFeaturesPager
-import dev.ujhhgtg.wekit.activity.settings.miuix.MiuixHomePager
-import dev.ujhhgtg.wekit.activity.settings.miuix.MiuixLogsPager
-import dev.ujhhgtg.wekit.activity.settings.miuix.MiuixSettingsPager
 import dev.ujhhgtg.wekit.features.core.BaseFeature
 import dev.ujhhgtg.wekit.features.core.ClickableFeature
 import dev.ujhhgtg.wekit.features.core.SwitchFeature
@@ -103,10 +85,9 @@ import dev.ujhhgtg.wekit.preferences.WePrefs
 import dev.ujhhgtg.wekit.ui.content.FloatingBottomBar
 import dev.ujhhgtg.wekit.ui.content.FloatingBottomBarDefaults
 import dev.ujhhgtg.wekit.ui.content.FloatingBottomBarItem
+import dev.ujhhgtg.wekit.ui.content.MiuixStackNavigator
 import dev.ujhhgtg.wekit.ui.content.liquid.vibrancy
-import dev.ujhhgtg.wekit.ui.navigation.NavigationTransitions
 import dev.ujhhgtg.wekit.ui.utils.CommonContextWrapper
-import dev.ujhhgtg.wekit.ui.utils.theme.AppUiEngine
 import dev.ujhhgtg.wekit.ui.utils.theme.ModuleTheme
 import dev.ujhhgtg.wekit.ui.utils.theme.ThemeSettings
 import dev.ujhhgtg.wekit.utils.WeLogger
@@ -137,17 +118,16 @@ val LocalComponentActivity = staticCompositionLocalOf<ComponentActivity> { error
 
 @Keep
 class SettingsActivity : ComponentActivity() {
-    private val contextWrapper = CommonContextWrapper(this)
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        val resources = contextWrapper.resources
+        val context = CommonContextWrapper(this)
+        val resources = context.resources
 
         setContent {
             CompositionLocalProvider(
-                LocalContext provides contextWrapper,
+                LocalContext provides context,
                 LocalResources provides resources,
                 LocalActivity provides this,
                 LocalComponentActivity provides this
@@ -157,10 +137,6 @@ class SettingsActivity : ComponentActivity() {
                 }
             }
         }
-    }
-
-    override fun getResources(): Resources {
-        return contextWrapper.resources
     }
 }
 
@@ -191,85 +167,33 @@ val FEATURE_CATEGORIES = listOf(
 )
 
 // ---------------------------------------------------------------------------
-//  Root: engine dispatcher → routes to Miuix or Material 3 tree
+//  Root: three-tab pager + floating bottom bar, with category drill-down
 // ---------------------------------------------------------------------------
 
-/**
- * Dispatches to the Miuix or Material 3 navigation tree depending on [ThemeSettings.uiEngine].
- * Reads the engine as observable state, so a live engine change instantly re-renders the root.
- */
+/** Navigation targets for the Settings activity's stack. */
+private sealed interface SettingsNavTarget {
+    data object Main : SettingsNavTarget
+    data class Category(val name: String) : SettingsNavTarget
+    data object License : SettingsNavTarget
+}
+
 @Composable
 private fun SettingsRoot(onFinish: () -> Unit) {
-    when (ThemeSettings.uiEngine) {
-        AppUiEngine.MIUIX     -> MiuixSettingsRoot(onFinish = onFinish)
-        AppUiEngine.MATERIAL3 -> Material3SettingsRoot(onFinish = onFinish)
-    }
-}
+    val stack = remember { mutableStateListOf<SettingsNavTarget>(SettingsNavTarget.Main) }
 
-@Composable
-private fun MiuixSettingsRoot(
-    @Suppress("UNUSED_PARAMETER") onFinish: () -> Unit
-) {
-    val navController = rememberNavController()
-    NavHost(
-        navController = navController,
-        startDestination = "main",
-        enterTransition  = { NavigationTransitions.enter },
-        exitTransition   = { NavigationTransitions.exit },
-        popEnterTransition = { NavigationTransitions.popEnter },
-        popExitTransition  = { NavigationTransitions.popExit },
-    ) {
-        composable("main") {
-            MainPagerScreen(
-                onOpenCategory = { name -> navController.navigate("category/${Uri.encode(name)}") },
-                onOpenLicense  = { navController.navigate("license") },
+    MiuixStackNavigator(stack = stack, onExitRoot = onFinish) { screen, push, pop ->
+        when (screen) {
+            SettingsNavTarget.Main      -> MainPagerScreen(
+                onOpenCategory = { push(SettingsNavTarget.Category(it)) },
+                onOpenLicense  = { push(SettingsNavTarget.License) },
             )
-        }
-        composable(
-            route = "category/{name}",
-            arguments = listOf(navArgument("name") { type = NavType.StringType }),
-        ) { entry ->
-            CategoryDetailScreen(
-                categoryName = entry.arguments?.getString("name").orEmpty(),
-                onBack = { navController.popBackStack() },
+            is SettingsNavTarget.Category -> CategoryDetailScreen(
+                categoryName = screen.name,
+                onBack = pop,
             )
-        }
-        composable("license") {
-            LicenseScreen(onBack = { navController.popBackStack() })
-        }
-    }
-}
-
-@Composable
-private fun Material3SettingsRoot(
-    @Suppress("UNUSED_PARAMETER") onFinish: () -> Unit,
-) {
-    val navController = rememberNavController()
-    NavHost(
-        navController = navController,
-        startDestination = "main",
-        enterTransition   = { NavigationTransitions.enter },
-        exitTransition    = { NavigationTransitions.exit },
-        popEnterTransition  = { NavigationTransitions.popEnter },
-        popExitTransition   = { NavigationTransitions.popExit },
-    ) {
-        composable("main") {
-            Material3MainPagerScreen(
-                onOpenCategory = { name -> navController.navigate("category/${Uri.encode(name)}") },
-                onOpenLicense  = { navController.navigate("license") },
+            SettingsNavTarget.License   -> LicenseScreen(
+                onBack = pop,
             )
-        }
-        composable(
-            route = "category/{name}",
-            arguments = listOf(navArgument("name") { type = NavType.StringType }),
-        ) { entry ->
-            Material3CategoryDetailScreen(
-                categoryName = entry.arguments?.getString("name").orEmpty(),
-                onBack = { navController.popBackStack() },
-            )
-        }
-        composable("license") {
-            Material3LicenseScreen(onBack = { navController.popBackStack() })
         }
     }
 }
@@ -301,10 +225,10 @@ private fun MainPagerScreen(
                 key = { it },
             ) { page ->
                 when (page) {
-                    0 -> MiuixHomePager(onOpenFeatures = { scope.launch { pagerState.animateScrollToPage(1) } })
-                    1 -> MiuixFeaturesPager(onOpenCategory = onOpenCategory)
-                    2 -> MiuixLogsPager()
-                    else -> MiuixSettingsPager(onOpenLicense = onOpenLicense)
+                    0 -> HomePager(onOpenFeatures = { scope.launch { pagerState.animateScrollToPage(1) } })
+                    1 -> FeaturesPager(onOpenCategory = onOpenCategory)
+                    2 -> LogsPager()
+                    else -> SettingsPager(onOpenLicense = onOpenLicense)
                 }
             }
         }
@@ -384,109 +308,6 @@ private val TAB_ITEMS = listOf(
 
 /** Bottom padding so scrollable content clears the floating bar. */
 val CONTENT_BOTTOM_INSET = 88.dp
-
-// ---------------------------------------------------------------------------
-//  Material 3 main pager — same FloatingBottomBar shell, M3 page composables
-// ---------------------------------------------------------------------------
-
-/**
- * Identical shell to [MainPagerScreen] (same [FloatingBottomBar] + [HorizontalPager]) but renders
- * the Material 3 page variants. The bar colors read [androidx.compose.material3.MaterialTheme.colorScheme] instead of
- * [MiuixTheme.colorScheme]; both are available under [ModuleTheme].
- */
-@Composable
-private fun Material3MainPagerScreen(
-    onOpenCategory: (String) -> Unit,
-    onOpenLicense: () -> Unit,
-) {
-    val pagerState = rememberPagerState(pageCount = { 4 })
-    val isDragged by pagerState.interactionSource.collectIsDraggedAsState()
-    val scope = rememberCoroutineScope()
-    val backdrop = rememberLayerBackdrop()
-    val barBottomPadding = 12.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val m3Colors = androidx.compose.material3.MaterialTheme.colorScheme
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(m3Colors.background),
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .layerBackdrop(backdrop),
-        ) {
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier.fillMaxSize(),
-                key = { it },
-            ) { page ->
-                when (page) {
-                    0 -> Material3HomePager(onOpenFeatures = { scope.launch { pagerState.animateScrollToPage(1) } })
-                    1 -> Material3FeaturesPager(onOpenCategory = onOpenCategory)
-                    2 -> Material3LogsPager()
-                    else -> Material3SettingsPager(onOpenLicense = onOpenLicense)
-                }
-            }
-        }
-
-        val haptic = LocalHapticFeedback.current
-
-        FloatingBottomBar(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = {},
-                )
-                .padding(bottom = barBottomPadding),
-            selectedIndex = { pagerState.targetPage },
-            progress = { pagerState.currentPage + pagerState.currentPageOffsetFraction },
-            isTracking = { isDragged },
-            onSelected = { scope.launch { pagerState.animateScrollToPage(it) } },
-            backdrop = backdrop,
-            tabsCount = TAB_ITEMS.size,
-            isBlurEnabled = true,
-            colors = FloatingBottomBarDefaults.colors(
-                containerColor = m3Colors.surfaceContainer,
-                indicatorColor = m3Colors.primary,
-                contentColor = m3Colors.onSurfaceVariant,
-                activeContentColor = m3Colors.primary,
-            ),
-        ) {
-            val target = pagerState.targetPage
-            TAB_ITEMS.forEachIndexed { index, item ->
-                FloatingBottomBarItem(
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.ContextClick)
-                        scope.launch { pagerState.animateScrollToPage(index) }
-                    },
-                    modifier = Modifier.defaultMinSize(minWidth = 76.dp),
-                ) {
-                    Crossfade(
-                        targetState = index == target,
-                        animationSpec = tween(200),
-                        label = "navIcon",
-                    ) { selected ->
-                        M3Icon(
-                            imageVector = if (selected) item.filled else item.outlined,
-                            contentDescription = item.label,
-                        )
-                    }
-                    M3Text(
-                        text = item.label,
-                        fontSize = 11.sp,
-                        lineHeight = 14.sp,
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Visible,
-                    )
-                }
-            }
-        }
-    }
-}
 
 // ---------------------------------------------------------------------------
 //  Shared scaffold: miuix Scaffold + collapsing TopAppBar + scrollable column

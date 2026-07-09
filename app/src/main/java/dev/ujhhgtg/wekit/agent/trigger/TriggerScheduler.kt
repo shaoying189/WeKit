@@ -4,9 +4,11 @@ import dev.ujhhgtg.wekit.agent.data.entity.TriggerEntity
 import dev.ujhhgtg.wekit.utils.WeLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Calendar
 import java.util.concurrent.ConcurrentHashMap
 
@@ -78,7 +80,12 @@ class TriggerScheduler(
             // Re-check we weren't cancelled during the sleep.
             if (!scope.isActive) return
 
-            runCatching { onFire(trigger) }
+            // Wrap in NonCancellable so a resync() that replaces this job mid-fire doesn't abort
+            // the launch. onFire() is cheap (it just starts a turn coroutine and returns), so the
+            // non-cancellable window is tiny. Without this, setTriggerLastFiredAt inside dispatch()
+            // emits on observeTriggers(), causing resync() to cancel-and-replace this job before
+            // onFire returns, which produces a spurious "schedule fire failed" CancellationException.
+            runCatching { withContext(NonCancellable) { onFire(trigger) } }
                 .onFailure { WeLogger.e(TAG, "schedule fire failed for ${trigger.id}", it) }
 
             if (trigger.scheduleKind == ScheduleKind.ONCE) {

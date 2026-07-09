@@ -87,14 +87,14 @@ fun MemoryScreen(onBack: () -> Unit) {
     }
 }
 
-internal data class MemoryIndexEntry(val title: String, val description: String)
-internal data class MemoryIndex(val entries: List<MemoryIndexEntry>, val parseFailed: Boolean)
+private data class MemoryIndexEntry(val title: String, val description: String)
+private data class MemoryIndex(val entries: List<MemoryIndexEntry>, val parseFailed: Boolean)
 
 /**
  * Parses MEMORY.md's index lines of the form `- [Title](file.md) — description`. Any exception is
  * treated as a parse failure (surfaced as a non-blocking warning).
  */
-internal fun parseMemoryIndex(): MemoryIndex = runCatching {
+private fun parseMemoryIndex(): MemoryIndex = runCatching {
     val text = WorkspaceStore.readMemoryIndex()
     val re = Regex("""^\s*[-*]\s*\[([^\]]+)]\([^)]*\)\s*[—\-:]*\s*(.*)$""")
     val entries = text.lineSequence().mapNotNull { line ->
