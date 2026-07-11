@@ -33,7 +33,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.toMutableStateList
@@ -43,8 +42,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.unit.dp
 import androidx.core.view.children
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.materialsymbols.MaterialSymbols
 import com.composables.icons.materialsymbols.outlined.Account_box
@@ -68,7 +65,6 @@ import com.composables.icons.materialsymbols.outlined.Settings
 import com.composables.icons.materialsymbols.outlined.Video_chat
 import com.composables.icons.materialsymbols.outlined.Voice_chat
 import com.tencent.mm.pluginsdk.ui.chat.ChatFooter
-import com.tencent.mm.ui.LauncherUI
 import dev.ujhhgtg.reflekt.reflekt
 import dev.ujhhgtg.reflekt.utils.createInstance
 import dev.ujhhgtg.wekit.dexkit.abc.IResolveDex
@@ -89,6 +85,7 @@ import dev.ujhhgtg.wekit.ui.utils.iterable
 import dev.ujhhgtg.wekit.ui.utils.setLifecycleOwner
 import dev.ujhhgtg.wekit.ui.utils.showComposeDialog
 import dev.ujhhgtg.wekit.utils.WeLogger
+import dev.ujhhgtg.wekit.utils.now
 import dev.ujhhgtg.wekit.utils.reflection.BInt
 import dev.ujhhgtg.wekit.utils.reflection.int
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -96,6 +93,7 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import java.lang.ref.WeakReference
+import kotlin.time.Duration.Companion.seconds
 
 @SuppressLint("StaticFieldLeak")
 @Feature(name = "聊天工具栏", categories = ["聊天"], description = "在输入框上方添加工具栏")
@@ -140,8 +138,6 @@ object ChatToolbar : ClickableFeature(), IResolveDex {
             )
         }
     }
-
-    private var lastConversation: String? = null
 
     private data class MenuItem(
         val name: String,
@@ -194,11 +190,9 @@ object ChatToolbar : ClickableFeature(), IResolveDex {
         WeMessageApi.sendText(WeCurrentConversationApi.value, text)
     }
 
-    override fun onEnable() {
-        LauncherUI::class.reflekt().firstMethod("startChatting").hookBefore {
-            lastConversation = null
-        }
+    private var lastToolListUpdateTime = now()
 
+    override fun onEnable() {
         methodAppPanelInitAppGrid.apply {
             hookBefore {
                 val appPanel = args[0] as LinearLayout
@@ -229,9 +223,10 @@ object ChatToolbar : ClickableFeature(), IResolveDex {
             }
 
             hookAfter {
-                val currentConv = WeCurrentConversationApi.value
+                val now = now()
+                if (now - lastToolListUpdateTime < 2.seconds) return@hookAfter
 
-                if (currentConv == lastConversation && toolsState.value.isNotEmpty()) return@hookAfter
+                if (toolsState.value.isNotEmpty()) return@hookAfter
 
                 val tools = mutableListOf<Pair<String, MenuItem>>()
 
@@ -263,9 +258,11 @@ object ChatToolbar : ClickableFeature(), IResolveDex {
                     }
                 }
 
-                WeLogger.d(TAG, "populated tool list with ${tools.size} items for conversation: $currentConv")
+                WeLogger.d(TAG, "populated tool list with ${tools.size} items")
                 toolsState.value = tools
-                lastConversation = currentConv
+
+                // rate limit this since this method is called REALLY frequently
+                lastToolListUpdateTime = now()
             }
         }
 
@@ -293,29 +290,6 @@ object ChatToolbar : ClickableFeature(), IResolveDex {
 
                 setContent {
                     InjectedUiTheme {
-                        DisposableEffect(lifecycleOwner) {
-                            val observer = LifecycleEventObserver { _, event ->
-                                when (event) {
-                                    Lifecycle.Event.ON_RESUME,
-                                    Lifecycle.Event.ON_PAUSE,
-                                    Lifecycle.Event.ON_STOP,
-                                    Lifecycle.Event.ON_DESTROY -> {
-                                        lastConversation = null
-                                    }
-
-                                    else -> {}
-                                }
-                            }
-
-                            lifecycleOwner.lifecycle.addObserver(observer)
-
-                            onDispose {
-                                lifecycleOwner.lifecycle.removeObserver(observer)
-                                toolsState.value = emptyList()
-                                lastConversation = null
-                            }
-                        }
-
                         val tools by toolsState.collectAsStateWithLifecycle()
                         val itemsOrder = remember { itemsOrder }
                         val enabledItems = remember { enabledItems }
@@ -378,7 +352,6 @@ object ChatToolbar : ClickableFeature(), IResolveDex {
 
     override fun onDisable() {
         toolsState.value = emptyList()
-        lastConversation = null
     }
 
     override fun onClick(context: ComponentActivity) {

@@ -70,9 +70,19 @@ object NotificationsEvolved : SwitchFeature(), IResolveDex {
 
     private val lastGroupChatSender = LruCache<String, String>()
 
+    private data class HistoryEntry(val senderName: String, val text: String, val timestamp: Long)
+    // Per-conversation message history rebuilt into MessagingStyle on each notification update.
+    // Cleared when the user replies or marks as read; bounded to avoid unbounded growth.
+    private val messageHistory = LinkedHashMap<String, ArrayDeque<HistoryEntry>>()
+    private const val MAX_HISTORY = 7
+
     private const val ACTION_REPLY = "${PackageNames.WECHAT}.ACTION_WEKIT_REPLY"
-    private const val ACTION_MARK_READ =
-        "${PackageNames.WECHAT}.ACTION_WEKIT_MARK_READ"
+    private const val ACTION_MARK_READ = "${PackageNames.WECHAT}.ACTION_WEKIT_MARK_READ"
+    private const val ACTION_NOTIFICATION_OPENED = "${PackageNames.WECHAT}.ACTION_WEKIT_NOTIFICATION_OPENED"
+    private const val ACTION_NOTIFICATION_DISMISSED = "${PackageNames.WECHAT}.ACTION_WEKIT_NOTIFICATION_DISMISSED"
+
+    // WeChat's original contentIntent per convWxId, stored so we can fire it after clearing history.
+    private val pendingContentIntents = HashMap<String, PendingIntent>()
 
     private lateinit var meAvatarIcon: Icon
 
@@ -101,7 +111,21 @@ object NotificationsEvolved : SwitchFeature(), IResolveDex {
                 ACTION_MARK_READ -> {
                     WeLogger.i(TAG, "marking chat as read for $targetWxId")
                     WeConversationApi.markAsRead(targetWxId)
+                    messageHistory.remove(targetWxId)
+                    pendingContentIntents.remove(targetWxId)
                     notificationManager.cancel(targetWxId.hashCode())
+                }
+
+                ACTION_NOTIFICATION_OPENED -> {
+                    // Notification was tapped — clear history, then hand off to WeChat's own intent.
+                    messageHistory.remove(targetWxId)
+                    pendingContentIntents.remove(targetWxId)?.send()
+                }
+
+                ACTION_NOTIFICATION_DISMISSED -> {
+                    // Notification was swiped away — just clear history.
+                    messageHistory.remove(targetWxId)
+                    pendingContentIntents.remove(targetWxId)
                 }
             }
         }
@@ -141,6 +165,8 @@ object NotificationsEvolved : SwitchFeature(), IResolveDex {
         val filter = IntentFilter().apply {
             addAction(ACTION_REPLY)
             addAction(ACTION_MARK_READ)
+            addAction(ACTION_NOTIFICATION_OPENED)
+            addAction(ACTION_NOTIFICATION_DISMISSED)
         }
         ContextCompat.registerReceiver(
             HostInfo.application, notificationReceiver, filter,
@@ -212,7 +238,8 @@ object NotificationsEvolved : SwitchFeature(), IResolveDex {
 
                 WeLogger.i(TAG, "enhancing notification for $notifTitle ($convWxId)")
 
-                // 2. Build the MessagingStyle
+                // 2. Build the MessagingStyle, accumulating messages so that "2" doesn't
+                //    erase "1" when the user hasn't acted on the notification yet.
                 // TODO: add cropping
                 val mePerson = Person.Builder().setName("我")
                     .apply {
@@ -229,10 +256,46 @@ object NotificationsEvolved : SwitchFeature(), IResolveDex {
                     senderName = notifTitle
                 }
 
-                val senderPerson = Person.Builder().setName(senderName).build()
-                messagingStyle.addMessage(text, System.currentTimeMillis(), senderPerson)
+                // Append the new message to this conversation's history, then replay
+                // the whole history into the style so previous messages are not lost.
+                val history = messageHistory.getOrPut(convWxId) { ArrayDeque() }
+                history.addLast(HistoryEntry(senderName, text, System.currentTimeMillis()))
+                while (history.size > MAX_HISTORY) history.removeFirst()
+
+                for (entry in history) {
+                    val person = Person.Builder().setName(entry.senderName).build()
+                    messagingStyle.addMessage(entry.text, entry.timestamp, person)
+                }
 
                 builder.style = messagingStyle
+
+                // 2.5. Wrap WeChat's contentIntent so tapping the notification clears
+                //      history before handing off to WeChat's own chat-open flow.
+                //      Also attach a deleteIntent to catch swipe-dismiss.
+                val originalContentIntent = notif.contentIntent
+                if (originalContentIntent != null) {
+                    pendingContentIntents[convWxId] = originalContentIntent
+                    val openIntent = Intent(ACTION_NOTIFICATION_OPENED).apply {
+                        setPackage(PackageNames.WECHAT)
+                        putExtra("extra_target_wxid", convWxId)
+                    }
+                    builder.setContentIntent(
+                        PendingIntent.getBroadcast(
+                            context, convWxId.hashCode(), openIntent,
+                            PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                        )
+                    )
+                }
+                val dismissIntent = Intent(ACTION_NOTIFICATION_DISMISSED).apply {
+                    setPackage(PackageNames.WECHAT)
+                    putExtra("extra_target_wxid", convWxId)
+                }
+                builder.setDeleteIntent(
+                    PendingIntent.getBroadcast(
+                        context, convWxId.hashCode(), dismissIntent,
+                        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                    )
+                )
 
                 // 3. Quick Reply Action
                 val remoteInput = RemoteInput.Builder("key_reply_content")
