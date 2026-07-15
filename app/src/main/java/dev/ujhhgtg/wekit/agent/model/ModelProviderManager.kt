@@ -105,7 +105,7 @@ object ModelProviderManager {
 
     /**
      * Fetches the provider's available model ids. Three list-endpoint shapes are supported:
-     *  - **OpenAI / WeKit Router** (`OPENAI_CHAT_COMPLETION` / `OPENAI_RESPONSES` / `WEKIT_ROUTER`):
+     *  - **OpenAI** (`OPENAI_CHAT_COMPLETION` / `OPENAI_RESPONSES`):
      *    `GET {baseUrl}/models` → `{ "data": [ { "id": "…" }, … ] }`. Auth: `Authorization: Bearer`.
      *  - **Gemini** (`GEMINI_GENERATE_CONTENT` / `GEMINI_INTERACTIONS`): `GET {baseUrl}/models` →
      *    `{ "models": [ { "name": "models/gemini-…", … }, … ] }`. Auth: `x-goog-api-key`.
@@ -120,7 +120,6 @@ object ModelProviderManager {
         }
         val isGemini = provider.type == ModelProviderType.GEMINI_GENERATE_CONTENT
             || provider.type == ModelProviderType.GEMINI_INTERACTIONS
-        // WeKit Router always uses its hardcoded base URL.
         val resolvedBase = provider.baseUrl.trimEnd('/')
         val endpoint = "$resolvedBase/models"
         return runCatching {

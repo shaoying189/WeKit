@@ -5,6 +5,8 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import dev.ujhhgtg.wekit.agent.data.dao.ConditionalPromptDao
 import dev.ujhhgtg.wekit.agent.data.dao.ExternalServiceDao
 import dev.ujhhgtg.wekit.agent.data.dao.MessageDao
@@ -57,7 +59,7 @@ import dev.ujhhgtg.wekit.utils.fs.createDirsSafe
         TriggerEntity::class,
         ExternalServiceEntity::class,
     ],
-    version = 11,
+    version = 12,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 9, to = 10), // adds external_services table
@@ -91,6 +93,21 @@ abstract class WeAgentDatabase : RoomDatabase() {
                 INSTANCE ?: build().also { INSTANCE = it }
             }
 
+        // 11 → 12: WEKIT_ROUTER enum value removed from ModelProviderType.
+        // Any stored provider row with that type is now unreadable; delete them so the
+        // converter no longer encounters an unknown enum name on startup.
+        private val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Remove models that referenced the now-deleted provider first to avoid
+                // dangling providerId foreign keys, then drop the providers themselves.
+                db.execSQL(
+                    "DELETE FROM models WHERE providerId IN " +
+                    "(SELECT id FROM model_providers WHERE type = 'WEKIT_ROUTER')"
+                )
+                db.execSQL("DELETE FROM model_providers WHERE type = 'WEKIT_ROUTER'")
+            }
+        }
+
         private fun build(): WeAgentDatabase {
             val dbFile = KnownPaths.moduleData
                 .resolve("agent")
@@ -103,6 +120,7 @@ abstract class WeAgentDatabase : RoomDatabase() {
                 // WAL uses mmap'd -shm/-wal sidecars that misbehave on FUSE-emulated
                 // external storage (moduleData lives on /sdcard); TRUNCATE is safe there.
                 .setJournalMode(JournalMode.TRUNCATE)
+                .addMigrations(MIGRATION_11_12)
                 .fallbackToDestructiveMigration(dropAllTables = true)
                 .build()
         }
